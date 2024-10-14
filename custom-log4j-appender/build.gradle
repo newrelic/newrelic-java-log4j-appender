@@ -1,0 +1,42 @@
+plugins {
+    id 'java'
+    id 'com.github.johnrengelman.shadow' version '6.1.0'
+}
+
+repositories {
+    mavenCentral() // Ensure you are using Maven Central repository
+}
+
+dependencies {
+    // OkHttp for HTTP requests
+    implementation 'com.squareup.okhttp3:okhttp:4.9.3'
+
+    // Jackson for JSON processing
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.13.1'
+
+    // Log4j Core for logging
+    implementation 'org.apache.logging.log4j:log4j-core:2.14.1'
+    implementation 'org.apache.logging.log4j:log4j-api:2.14.1'
+}
+
+jar {
+    manifest {
+        attributes(
+            'Implementation-Title': 'com.newrelic.labs.custom-log4j-appender',
+            'Implementation-Vendor': 'New Relic Labs',
+            'Implementation-Vendor-Id': 'com.newrelic.labs',
+            'Implementation-Version': '1.0'
+        )
+    }
+}
+
+shadowJar {
+    mergeServiceFiles()
+    manifest {
+        attributes 'Main-Class': 'com.newrelic.labs.logforwarder.MAIN'
+    }
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
