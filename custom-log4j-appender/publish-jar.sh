@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# clean existing stuff
+rm -rf build io
+# copy correct build.gradle
+cp build-jar.gradle build.gradle
 # Set variables
 GROUP_ID="io.github.newrelic-experimental"
 ARTIFACT_ID="custom-log4j-appender"
