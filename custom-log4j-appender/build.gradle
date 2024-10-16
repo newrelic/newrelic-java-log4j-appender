@@ -1,6 +1,5 @@
 plugins {
     id 'java'
-    id 'com.github.johnrengelman.shadow' version '6.1.0'
     id 'maven-publish'
 }
 
@@ -16,14 +15,13 @@ dependencies {
 }
 
 jar {
-    enabled = false // Disable the standard JAR task
-}
-
-shadowJar {
-    archiveClassifier.set('') // Remove the 'all' classifier
-    mergeServiceFiles()
     manifest {
-        attributes 'Main-Class': 'com.newrelic.labs.logforwarder.MAIN'
+        attributes(
+            'Implementation-Title': 'Custom Log4j Appender',
+            'Implementation-Vendor': 'New Relic Labs',
+            'Implementation-Vendor-Id': 'com.newrelic.labs',
+            'Implementation-Version': '1.0.2'
+        )
     }
 }
 
@@ -41,20 +39,23 @@ task sourcesJar(type: Jar) {
     from sourceSets.main.allSource
 }
 
+
+
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            artifact shadowJar // Only include Shadow JAR
+            from components.java // Include standard JAR
+
             artifact javadocJar
             artifact sourcesJar
 
             groupId = 'io.github.newrelic-experimental'
             artifactId = 'custom-log4j-appender'
-            version = '1.0.0'
+            version = '1.0.2'
 
             pom {
                 name = 'Custom Log4j Appender'
-                description = 'A custom Log4j appender for New Relic Labs.'
+                description = 'A custom Log4j appender for New Relic.'
                 url = 'https://github.com/newrelic-experimental/newrelic-java-log4j-appender'
                 licenses {
                     license {
@@ -66,7 +67,7 @@ publishing {
                     developer {
                         id = 'newrelic'
                         name = 'New Relic'
-                        email = 'info@newrelic.com'
+                        email = 'gsidhwani@newrelic.com'
                     }
                 }
                 scm {
