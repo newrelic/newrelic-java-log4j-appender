@@ -23,7 +23,12 @@ shadowJar {
     archiveClassifier.set('') // Remove the 'all' classifier
     mergeServiceFiles()
     manifest {
-        attributes 'Main-Class': 'com.newrelic.labs.logforwarder.MAIN'
+        attributes(
+            'Implementation-Title': 'Custom Log4j Appender',
+            'Implementation-Vendor': 'New Relic Labs',
+            'Implementation-Vendor-Id': 'com.newrelic.labs',
+            'Implementation-Version': '1.0.2'
+        )
     }
 }
 
