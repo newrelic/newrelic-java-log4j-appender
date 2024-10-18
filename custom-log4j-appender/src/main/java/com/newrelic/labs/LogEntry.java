@@ -1,3 +1,4 @@
+
 package com.newrelic.labs;
 
 public class LogEntry {

@@ -6,11 +6,11 @@ rm -rf build io
 cp build-jar.gradle build.gradle
 # Set variables
 GROUP_ID="io.github.newrelic-experimental"
-ARTIFACT_ID="custom-log4j-appender"
-VERSION="1.0.2"
+ARTIFACT_ID="custom-log4j2-appender"
+VERSION="0.0.8"
 KEY_ID="0ED9FD74E81E6D83FAE25F235640EA0B1C631C6F" # Replace with your actual key ID
 
-# Get the current directory (assuming the script is run from the custom-log4j-appender directory)
+# Get the current directory (assuming the script is run from the custom-log4j2-appender directory)
 CURRENT_DIR=$(pwd)
 PROJECT_ROOT=$(dirname "$CURRENT_DIR")
 
@@ -29,10 +29,10 @@ echo "Contents of build/libs:"
 ls -la
 
 # Find the files without version numbers
-JAR_FILE="custom-log4j-appender.jar"
-JAVADOC_FILE="custom-log4j-appender-javadoc.jar"
-SOURCES_FILE="custom-log4j-appender-sources.jar"
-POM_FILE="custom-log4j-appender-$VERSION.pom"
+JAR_FILE="custom-log4j2-appender.jar"
+JAVADOC_FILE="custom-log4j2-appender-javadoc.jar"
+SOURCES_FILE="custom-log4j2-appender-sources.jar"
+POM_FILE="custom-log4j2-appender-$VERSION.pom"
 
 echo "JAR File: $JAR_FILE"
 echo "Javadoc File: $JAVADOC_FILE"
@@ -52,22 +52,22 @@ mkdir -p $TARGET_DIR
 
 # Copy the built artifacts to the appropriate directory with version numbers
 echo "Copying artifacts to $TARGET_DIR"
-cp $JAR_FILE $TARGET_DIR/custom-log4j-appender-$VERSION.jar
-cp $JAVADOC_FILE $TARGET_DIR/custom-log4j-appender-$VERSION-javadoc.jar
-cp $SOURCES_FILE $TARGET_DIR/custom-log4j-appender-$VERSION-sources.jar
+cp $JAR_FILE $TARGET_DIR/custom-log4j2-appender-$VERSION.jar
+cp $JAVADOC_FILE $TARGET_DIR/custom-log4j2-appender-$VERSION-javadoc.jar
+cp $SOURCES_FILE $TARGET_DIR/custom-log4j2-appender-$VERSION-sources.jar
 
 # Navigate to the target directory
 cd $TARGET_DIR
 
 # Generate checksums for the copied files
-for file in custom-log4j-appender-$VERSION.jar custom-log4j-appender-$VERSION-javadoc.jar custom-log4j-appender-$VERSION-sources.jar; do
+for file in custom-log4j2-appender-$VERSION.jar custom-log4j2-appender-$VERSION-javadoc.jar custom-log4j2-appender-$VERSION-sources.jar; do
     echo "Generating checksums for $file"
     md5sum $file | awk '{ print $1 }' > $file.md5
     sha1sum $file | awk '{ print $1 }' > $file.sha1
 done
 
 # Generate GPG signatures using the specific key ID
-for file in custom-log4j-appender-$VERSION.jar custom-log4j-appender-$VERSION-javadoc.jar custom-log4j-appender-$VERSION-sources.jar; do
+for file in custom-log4j2-appender-$VERSION.jar custom-log4j2-appender-$VERSION-javadoc.jar custom-log4j2-appender-$VERSION-sources.jar; do
     echo "Generating GPG signature for $file"
     gpg --local-user $KEY_ID --armor --detach-sign $file
 done
@@ -142,7 +142,7 @@ gpg --local-user $KEY_ID --armor --detach-sign $POM_FILE
 
 # Verify checksums
 echo "Verifying checksums"
-for file in custom-log4j-appender-$VERSION.jar custom-log4j-appender-$VERSION-javadoc.jar custom-log4j-appender-$VERSION-sources.jar $POM_FILE; do
+for file in custom-log4j2-appender-$VERSION.jar custom-log4j2-appender-$VERSION-javadoc.jar custom-log4j2-appender-$VERSION-sources.jar $POM_FILE; do
     if [ -f "$file" ]; then
         echo "Verifying checksum for $file"
         md5sum -c <(echo "$(cat $file.md5)  $file")
@@ -153,11 +153,11 @@ for file in custom-log4j-appender-$VERSION.jar custom-log4j-appender-$VERSION-ja
     fi
 done
 
-# Navigate back to the custom-log4j-appender directory
+# Navigate back to the custom-log4j2-appender directory
 cd "$CURRENT_DIR"
 
 # Create a ZIP file containing the entire directory structure
-echo "Creating ZIP file custom-log4j-appender-$VERSION.zip"
-zip -r custom-log4j-appender-$VERSION.zip io
+echo "Creating ZIP file custom-log4j2-appender-$VERSION.zip"
+zip -r custom-log4j2-appender-$VERSION.zip io
 
-echo "Artifacts prepared and zipped successfully. You can now upload custom-log4j-appender-$VERSION.zip to Sonatype OSSRH."
+echo "Artifacts prepared and zipped successfully. You can now upload custom-log4j2-appender-$VERSION.zip to Sonatype OSSRH."

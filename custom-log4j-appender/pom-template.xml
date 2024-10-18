@@ -4,8 +4,8 @@
   <groupId>{{GROUP_ID}}</groupId>
   <artifactId>{{ARTIFACT_ID}}</artifactId>
   <version>{{VERSION}}</version>
-  <name>Custom Log4j Appender</name>
-  <description>A custom Log4j appender for New Relic Labs.</description>
+  <name>Custom Log4j2 Appender</name>
+  <description>A custom Log4j2 appender for New Relic.</description>
   <url>https://github.com/newrelic-experimental/newrelic-java-log4j-appender</url>
   <licenses>
     <license>

@@ -24,10 +24,10 @@ shadowJar {
     mergeServiceFiles()
     manifest {
         attributes(
-            'Implementation-Title': 'Custom Log4j Appender',
+            'Implementation-Title': 'Custom Log4j2 Appender',
             'Implementation-Vendor': 'New Relic Labs',
             'Implementation-Vendor-Id': 'com.newrelic.labs',
-            'Implementation-Version': '1.0.2'
+            'Implementation-Version': '1.0.0'
         )
     }
 }
@@ -54,12 +54,12 @@ publishing {
             artifact sourcesJar
 
             groupId = 'io.github.newrelic-experimental'
-            artifactId = 'custom-log4j-appender'
+            artifactId = 'custom-log4j2-appender'
             version = '1.0.0'
 
             pom {
-                name = 'Custom Log4j Appender'
-                description = 'A custom Log4j appender for New Relic Labs.'
+                name = 'Custom Log4j2 Appender'
+                description = 'A custom Log4j2 appender for New Relic.'
                 url = 'https://github.com/newrelic-experimental/newrelic-java-log4j-appender'
                 licenses {
                     license {
@@ -71,7 +71,7 @@ publishing {
                     developer {
                         id = 'newrelic'
                         name = 'New Relic'
-                        email = 'info@newrelic.com'
+                        email = 'gsidhwani@newrelic.com'
                     }
                 }
                 scm {

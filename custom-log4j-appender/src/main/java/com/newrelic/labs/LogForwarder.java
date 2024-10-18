@@ -1,3 +1,4 @@
+
 package com.newrelic.labs;
 
 import java.io.ByteArrayOutputStream;
@@ -128,11 +129,26 @@ public class LogForwarder {
 			if (!response.isSuccessful()) {
 				System.err.println("Failed to send logs to New Relic: " + response.code() + " - " + response.message());
 				System.err.println("Response body: " + response.body().string());
+				requeueLogs(logEntries); // Requeue logs if the response is not successful
 			} else {
 				LocalDateTime timestamp = LocalDateTime.now();
 				System.out.println("Logs sent to New Relic successfully: " + "at " + timestamp + " size: "
 						+ compressedPayload.length + " Bytes");
 				System.out.println("Response: " + response.body().string());
+			}
+		} catch (IOException e) {
+			System.err.println("Error during log forwarding: " + e.getMessage());
+			requeueLogs(logEntries); // Requeue logs if an exception occurs
+		}
+	}
+
+	private void requeueLogs(List<LogEntry> logEntries) {
+		for (LogEntry entry : logEntries) {
+			try {
+				logQueue.put(entry); // Requeue the log entry
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				System.err.println("Failed to requeue log entry: " + entry.getMessage());
 			}
 		}
 	}
