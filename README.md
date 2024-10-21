@@ -1,87 +1,159 @@
 <a href="https://opensource.newrelic.com/oss-category/#new-relic-experimental"><picture><source media="(prefers-color-scheme: dark)" srcset="https://github.com/newrelic/opensource-website/raw/main/src/images/categories/dark/Experimental.png"><source media="(prefers-color-scheme: light)" srcset="https://github.com/newrelic/opensource-website/raw/main/src/images/categories/Experimental.png"><img alt="New Relic Open Source experimental project banner." src="https://github.com/newrelic/opensource-website/raw/main/src/images/categories/Experimental.png"></picture></a>
 
 
-![GitHub forks](https://img.shields.io/github/forks/newrelic-experimental/java-instrumentation-template?style=social)
-![GitHub stars](https://img.shields.io/github/stars/newrelic-experimental/java-instrumentation-template?style=social)
-![GitHub watchers](https://img.shields.io/github/watchers/newrelic-experimental/java-instrumentation-template?style=social)
+![GitHub forks](https://img.shields.io/github/forks/newrelic-experimental/newrelic-java-log4j-appender?style=social)
+![GitHub stars](https://img.shields.io/github/stars/newrelic-experimental/newrelic-java-log4j-appender?style=social)
+![GitHub watchers](https://img.shields.io/github/watchers/newrelic-experimental/newrelic-java-log4j-appender?style=social)
 
-![GitHub all releases](https://img.shields.io/github/downloads/newrelic-experimental/java-instrumentation-template/total)
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/newrelic-experimental/java-instrumentation-template)
-![GitHub last commit](https://img.shields.io/github/last-commit/newrelic-experimental/java-instrumentation-template)
-![GitHub Release Date](https://img.shields.io/github/release-date/newrelic-experimental/java-instrumentation-template)
-
-
-![GitHub issues](https://img.shields.io/github/issues/newrelic-experimental/java-instrumentation-template)
-![GitHub issues closed](https://img.shields.io/github/issues-closed/newrelic-experimental/java-instrumentation-template)
-![GitHub pull requests](https://img.shields.io/github/issues-pr/newrelic-experimental/java-instrumentation-template)
-![GitHub pull requests closed](https://img.shields.io/github/issues-pr-closed/newrelic-experimental/java-instrumentation-template)
+![GitHub all releases](https://img.shields.io/github/downloads/newrelic-experimental/newrelic-java-log4j-appender/total)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/newrelic-experimental/newrelic-java-log4j-appender)
+![GitHub last commit](https://img.shields.io/github/last-commit/newrelic-experimental/newrelic-java-log4j-appender)
+![GitHub Release Date](https://img.shields.io/github/release-date/newrelic-experimental/newrelic-java-log4j-appender)
 
 
-# [Project Name - use format "newrelic-java-<name>"] [build badges go here when available]
+![GitHub issues](https://img.shields.io/github/issues/newrelic-experimental/newrelic-java-log4j-appender)
+![GitHub issues closed](https://img.shields.io/github/issues-closed/newrelic-experimental/newrelic-java-log4j-appender)
+![GitHub pull requests](https://img.shields.io/github/issues-pr/newrelic-experimental/newrelic-java-log4j-appender)
+![GitHub pull requests closed](https://img.shields.io/github/issues-pr-closed/newrelic-experimental/newrelic-java-log4j-appender)
 
->[Brief description - what is the project and value does it provide? How often should users expect to get releases? How is versioning set up? Where does this project want to go?]
+# New Relic Log4j2 Appender
 
-## Value
-
-|Metrics | Events | Logs | Traces | Visualization | Automation |
-|:-:|:-:|:-:|:-:|:-:|:-:|
-|:x:|:x:|:x:|:white_check_mark:|:x:|:x:|
-
-### List of Metrics,Events,Logs,Traces
-|Name | Type | Description |
-|:-:|:-:|:-:|
-|*metric.name* | Metric| *description*|
-|*event.name* | Event|  *description*|
-|*log.name* | Log|  *description*|
-|*trace.name*| Trace| *description*
-|---|---|---|
-
+A custom Log4j2 appender that sends logs to New Relic.
 
 ## Installation
 
-> [Include a step-by-step procedure on how to get your code installed. Be sure to include any third-party dependencies that need to be installed separately]
+Add the library to your project using Maven Central:
 
-## Getting Started
+```xml
+<dependency>
+    <groupId>io.github.newrelic-experimental</groupId>
+    <artifactId>custom-log4j2-appender</artifactId>
+    <version>0.0.8</version>
+</dependency>
+```
 
->[Simple steps to start working with the software similar to a "Hello World"]
+Or, if using a locally built JAR file:
+
+```xml
+<dependency>
+    <groupId>io.github.newrelic-experimental</groupId>
+    <artifactId>custom-log4j2-appender</artifactId>
+    <version>0.0.8</version>
+    <scope>system</scope>
+    <systemPath>${project.basedir}/src/main/resources/custom-log4j2-appender.jar</systemPath>
+</dependency>
+```
 
 ## Usage
 
->[**Optional** - Include more thorough instructions on how to use the software. This section might not be needed if the Getting Started section is enough. Remove this section if it's not needed.]
+### Set up New Relic Log4j2 Appender
+
+Follow the instructions for setting up the New Relic Log4j2 Appender.
+
+### Log4J XML Configuration
+
+Replace `[your-api-key]` with the ingest key obtained from the New Relic platform.
+
+#### log4j2.xml:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="DEBUG" name="cloudhub" packages="com.newrelic.labs">
+    <Appenders>
+        <!-- Custom New Relic Batching Appender with Pattern Layout -->
+        <NewRelicBatchingAppender name="NewRelicAppender"
+                                  apiKey="[your-api-key]"
+                                  apiUrl="https://log-api.newrelic.com/log/v1"
+                                  logType="muleLog"
+                                  applicationName="your-application-name"
+                                  batchSize="5000"
+                                  maxMessageSize="1048576"
+                                  flushInterval="120000">
+            <PatternLayout pattern="[%d{MM-dd HH:mm:ss}] %-5p %c{1} [%t]: %m%n"/>
+        </NewRelicBatchingAppender>
+    </Appenders>
+
+    <Loggers>
+        <AsyncRoot level="INFO">
+            <AppenderRef ref="NewRelicAppender"/>
+        </AsyncRoot>
+    </Loggers>
+</Configuration>
+```
+
+### Parameters
+
+| Parameter           | Required? | Default Value | Description                                                                 |
+|---------------------|-----------|---------------|-----------------------------------------------------------------------------|
+| name                | Yes       |               | Name used to register Log4j Appender                                        |
+| apiKey              | Yes       |               | API key for authenticating with New Relic's logging service                 |
+| apiUrl              | Yes       |               | URL for New Relic's log ingestion API                                       |
+| logType             | No        | "muleLog"     | Type of log being sent                                                      |
+| applicationName     | Yes       |               | Name of the application generating the logs                                 |
+| batchSize           | No        | 5000          | Maximum number of log entries to batch together before sending to New Relic |
+| maxMessageSize      | No        | 1048576       | Maximum size (in bytes) of the payload to be sent in a single HTTP request  |
+| flushInterval       | No        | 120000        | Interval (in milliseconds) at which the log entries are flushed to New Relic|
+
+### TLS 1.2 Requirement
+
+New Relic only accepts connections from clients using TLS version 1.2 or greater. Ensure that your execution environment is configured to use TLS 1.2 or greater.
+
+### Create GROK Parsing Rule at New Relic Platform
+
+- **Name**: `NRMuleParser`
+- **Field to parse**: `message`
+- **Filter logs based on NRQL**: `logtype = 'muleLog'`
+- **Parsing rule**:
+  ```sh
+  %{LOGLEVEL:log.level}  %{DATA:log.logger} \[%{DATA:log.thread}\]: %{GREEDYDATA:log.message}
+  ```
+
+## Sample log details at New Relic Platform
+
+<img width="745" alt="image" src="https://github.com/user-attachments/assets/6adff21d-7fdf-4b39-b19e-0ed385ff6ed5">
 
 ## Building
 
->[**Optional** - Include this section if users will need to follow specific instructions to build the software from source. Be sure to include any third party build dependencies that need to be installed separately. Remove this section if it's not needed.]
+### Building the Local JAR File
 
-## Testing
+```sh
+cd custom-log4j2-appender
+./build-local.sh 
+```
 
->[**Optional** - Include instructions on how to run tests if we include tests with the codebase. Remove this section if it's not needed.]
+### Copying the Local JAR File to the Destination
+
+Example:
+
+```sh
+cp build/libs/custom-log4j2-appender.jar /Users/gsidhwani/AnypointStudio/studio-workspace/samplemuleapp/src/main/resources/
+```
+
+## Scripts
+
+### `publish-jar.sh` and `publish-shadowJar.sh`
+
+These scripts generate a Maven publishing compatible bundle for publishing to Maven Central. This is for New Relic's use, and users are not required to use it. They should mention this dependency in their application's `pom.xml` file to pull it directly from Maven Central or build locally as per the instructions above.
 
 ## Support
 
 New Relic has open-sourced this project. This project is provided AS-IS WITHOUT WARRANTY OR DEDICATED SUPPORT. Issues and contributions should be reported to the project here on GitHub.
 
->[Choose 1 of the 2 options below for Support details, and remove the other one.]
+### Community Support
 
->[Option 1 - no specific thread in Community]
->We encourage you to bring your experiences and questions to the [Explorers Hub](https://discuss.newrelic.com) where our community members collaborate on solutions and new ideas.
-
->[Option 2 - thread in Community]
->New Relic hosts and moderates an online forum where customers can interact with New Relic employees as well as other customers to get help and share best practices. Like all official New Relic open source projects, there's a related Community topic in the New Relic Explorers Hub.
->You can find this project's topic/threads here: [URL for Community thread]
+We encourage you to bring your experiences and questions to the [Explorers Hub](https://discuss.newrelic.com) where our community members collaborate on solutions and new ideas.
 
 ## Contributing
 
-We encourage your contributions to improve [Project Name]! Keep in mind when you submit your pull request, you'll need to sign the CLA via the click-through using CLA-Assistant. You only have to sign the CLA one time per project. If you have any questions, or to execute our corporate CLA, required if your contribution is on behalf of a company, please drop us an email at opensource@newrelic.com.
+We encourage your contributions to improve the New Relic Log4j 2 Appender! When you submit your pull request, you'll need to sign the CLA via the click-through using CLA-Assistant. You only have to sign the CLA one time per project. If you have any questions, or to execute our corporate CLA (required if your contribution is on behalf of a company), please drop us an email at opensource@newrelic.com.
 
-**A note about vulnerabilities**
+### A Note About Vulnerabilities
 
-As noted in our [security policy](../../security/policy), New Relic is committed to the privacy and security of our customers and their data. We believe that providing coordinated disclosure by security researchers and engaging with the security community are important means to achieve our security goals.
+As noted in our [security policy](../../security/policy), New Relic is committed to the privacy and security of our customers and their data. We believe that coordinated disclosure by security researchers and engaging with the security community are important means to achieve our security goals.
 
 If you believe you have found a security vulnerability in this project or any of New Relic's products or websites, we welcome and greatly appreciate you reporting it to New Relic through [HackerOne](https://hackerone.com/newrelic).
 
 ## License
 
-[Project Name] is licensed under the [Apache 2.0](http://apache.org/licenses/LICENSE-2.0.txt) License.
+The New Relic Log4j 2 Appender is licensed under the [Apache 2.0](http://apache.org/licenses/LICENSE-2.0.txt) License.
 
->[If applicable: [Project Name] also uses source code from third-party libraries. You can find full details on which libraries are used and the terms under which they are licensed in the third-party notices document.]
