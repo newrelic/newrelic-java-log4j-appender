@@ -114,6 +114,8 @@ New Relic only accepts connections from clients using TLS version 1.2 or greater
 
 ## Building
 
+Please ensure JDK 8 is installed for this build.
+
 ### Building the Local JAR File
 
 ```sh
