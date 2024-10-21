@@ -108,6 +108,10 @@ New Relic only accepts connections from clients using TLS version 1.2 or greater
   %{LOGLEVEL:log.level}  %{DATA:log.logger} \[%{DATA:log.thread}\]: %{GREEDYDATA:log.message}
   ```
 
+## Sample log details at New Relic Platform
+
+<img width="745" alt="image" src="https://github.com/user-attachments/assets/6adff21d-7fdf-4b39-b19e-0ed385ff6ed5">
+
 ## Building
 
 ### Building the Local JAR File
