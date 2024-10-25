@@ -1,11 +1,9 @@
-
 package com.newrelic.labs;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -35,12 +33,6 @@ public class LogForwarder {
 		this.logQueue = logQueue;
 	}
 
-	public void addToQueue(List<String> lines, String applicationName, String name, String logtype) {
-		for (String line : lines) {
-			logQueue.add(new LogEntry(line, applicationName, name, logtype, System.currentTimeMillis()));
-		}
-	}
-
 	public boolean isInitialized() {
 		return apiKey != null && apiURL != null;
 	}
@@ -55,67 +47,87 @@ public class LogForwarder {
 
 		String hostname = localhost != null ? localhost.getHostName() : "unknown";
 
-		@SuppressWarnings("unused")
-		MediaType mediaType = MediaType.parse("application/json");
-
 		try {
 			List<Map<String, Object>> logEvents = new ArrayList<>();
 			for (LogEntry entry : logEntries) {
 				Map<String, Object> logEvent = objectMapper.convertValue(entry, LowercaseKeyMap.class);
 				logEvent.put("hostname", hostname);
 				logEvent.put("logtype", entry.getLogType());
-				logEvent.put("timestamp", entry.getTimestamp()); // Use log creation timestamp
+				logEvent.put("timestamp", entry.getTimestamp());
 				logEvent.put("applicationName", entry.getApplicationName());
 				logEvent.put("name", entry.getName());
-				logEvent.put("source", "NRBatchingAppender"); // Add custom field
+				logEvent.put("source", "NRBatchingAppender");
+
+				// Add custom fields
+				if (entry.getcustom() != null) {
+					logEvent.put("custom", entry.getcustom());
+				}
+
 				logEvents.add(logEvent);
 			}
 
 			String jsonPayload = objectMapper.writeValueAsString(logEvents);
 			byte[] compressedPayload = gzipCompress(jsonPayload);
 
-			if (compressedPayload.length > maxMessageSize) { // Configurable size limit
-				System.err.println("Batch size exceeds limit, splitting batch...");
-				List<LogEntry> subBatch = new ArrayList<>();
-				int currentSize = 0;
-				for (LogEntry entry : logEntries) {
-					String entryJson = objectMapper.writeValueAsString(entry);
-					int entrySize = gzipCompress(entryJson).length;
-					if (currentSize + entrySize > maxMessageSize) {
-						sendLogs(subBatch);
-						subBatch.clear();
-						currentSize = 0;
-					}
-					subBatch.add(entry);
-					currentSize += entrySize;
-				}
-				if (!subBatch.isEmpty()) {
-					sendLogs(subBatch);
-				}
+			if (compressedPayload.length > maxMessageSize) {
+				splitAndSendLogs(logEntries);
 			} else {
-				sendLogs(logEntries);
+				sendLogs(logEvents);
 			}
 		} catch (IOException e) {
 			System.err.println("Error during log forwarding: " + e.getMessage());
 		}
 	}
 
-	private void sendLogs(List<LogEntry> logEntries) throws IOException {
-		InetAddress localhost = InetAddress.getLocalHost();
-		String hostname = localhost.getHostName();
-
-		List<Map<String, Object>> logEvents = new ArrayList<>();
+	private void splitAndSendLogs(List<LogEntry> logEntries) throws IOException {
+		List<LogEntry> subBatch = new ArrayList<>();
+		int currentSize = 0;
 		for (LogEntry entry : logEntries) {
-			Map<String, Object> logEvent = objectMapper.convertValue(entry, LowercaseKeyMap.class);
-			logEvent.put("hostname", hostname);
-			logEvent.put("logtype", entry.getLogType());
-			logEvent.put("applicationName", entry.getApplicationName());
-			logEvent.put("name", entry.getName());
-			logEvent.put("timestamp", entry.getTimestamp()); // Use log creation timestamp
-			logEvent.put("source", "NRBatchingAppender"); // Add custom field
-			logEvents.add(logEvent);
+			String entryJson = objectMapper.writeValueAsString(entry);
+			int entrySize = gzipCompress(entryJson).length;
+			if (currentSize + entrySize > maxMessageSize) {
+				sendLogs(convertToLogEvents(subBatch));
+				subBatch.clear();
+				currentSize = 0;
+			}
+			subBatch.add(entry);
+			currentSize += entrySize;
 		}
+		if (!subBatch.isEmpty()) {
+			sendLogs(convertToLogEvents(subBatch));
+		}
+	}
 
+	private List<Map<String, Object>> convertToLogEvents(List<LogEntry> logEntries) {
+		List<Map<String, Object>> logEvents = new ArrayList<>();
+		try {
+			InetAddress localhost = InetAddress.getLocalHost();
+			String hostname = localhost.getHostName();
+
+			for (LogEntry entry : logEntries) {
+				Map<String, Object> logEvent = objectMapper.convertValue(entry, LowercaseKeyMap.class);
+				logEvent.put("hostname", hostname);
+				logEvent.put("logtype", entry.getLogType());
+				logEvent.put("timestamp", entry.getTimestamp());
+				logEvent.put("applicationName", entry.getApplicationName());
+				logEvent.put("name", entry.getName());
+				logEvent.put("source", "NRBatchingAppender");
+
+				// Add custom fields
+				// Add custom fields
+				if (entry.getcustom() != null) {
+					logEvent.put("custom", entry.getcustom());
+				}
+
+				logEvents.add(logEvent);
+			}
+		} catch (UnknownHostException e) {
+			System.err.println("Error resolving local host: " + e.getMessage());
+		}
+		return logEvents;
+	}
+
+	private void sendLogs(List<Map<String, Object>> logEvents) throws IOException {
 		String jsonPayload = objectMapper.writeValueAsString(logEvents);
 		byte[] compressedPayload = gzipCompress(jsonPayload);
 
@@ -129,26 +141,29 @@ public class LogForwarder {
 			if (!response.isSuccessful()) {
 				System.err.println("Failed to send logs to New Relic: " + response.code() + " - " + response.message());
 				System.err.println("Response body: " + response.body().string());
-				requeueLogs(logEntries); // Requeue logs if the response is not successful
+				requeueLogs(logEvents); // Requeue logs if the response is not successful
 			} else {
-				LocalDateTime timestamp = LocalDateTime.now();
-				System.out.println("Logs sent to New Relic successfully: " + "at " + timestamp + " size: "
-						+ compressedPayload.length + " Bytes");
-				System.out.println("Response: " + response.body().string());
+				// Comment out the following lines to prevent infinite loop
+				// LocalDateTime timestamp = LocalDateTime.now();
+				// System.out.println("Logs sent to New Relic successfully: " + "at " +
+				// timestamp + " size: "
+				// + compressedPayload.length + " Bytes");
+				// System.out.println("Response: " + response.body().string());
 			}
 		} catch (IOException e) {
 			System.err.println("Error during log forwarding: " + e.getMessage());
-			requeueLogs(logEntries); // Requeue logs if an exception occurs
+			requeueLogs(logEvents); // Requeue logs if an exception occurs
 		}
 	}
 
-	private void requeueLogs(List<LogEntry> logEntries) {
-		for (LogEntry entry : logEntries) {
+	private void requeueLogs(List<Map<String, Object>> logEvents) {
+		for (Map<String, Object> logEvent : logEvents) {
 			try {
-				logQueue.put(entry); // Requeue the log entry
+				LogEntry logEntry = objectMapper.convertValue(logEvent, LogEntry.class);
+				logQueue.put(logEntry); // Requeue the log entry
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
-				System.err.println("Failed to requeue log entry: " + entry.getMessage());
+				System.err.println("Failed to requeue log entry: " + logEvent);
 			}
 		}
 	}

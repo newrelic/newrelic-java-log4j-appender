@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # clean existing stuff
-rm -rf build io
+rm -rf build bundle
 # copy correct build.gradle
 cp build-jar.gradle build.gradle
 # Set variables
-GROUP_ID="io.github.newrelic-experimental"
+GROUP_ID="com.newrelic.labs"
 ARTIFACT_ID="custom-log4j2-appender"
-VERSION="0.0.8"
+VERSION="0.0.7"
 KEY_ID="0ED9FD74E81E6D83FAE25F235640EA0B1C631C6F" # Replace with your actual key ID
 
 # Get the current directory (assuming the script is run from the custom-log4j2-appender directory)
@@ -47,7 +47,7 @@ if [ ! -f "$JAR_FILE" ] || [ ! -f "$JAVADOC_FILE" ] || [ ! -f "$SOURCES_FILE" ];
 fi
 
 # Prepare the directory structure
-TARGET_DIR="$CURRENT_DIR/io/github/newrelic-experimental/custom-log4j2-appender/$VERSION"
+TARGET_DIR="$CURRENT_DIR/bundle"
 mkdir -p $TARGET_DIR
 
 # Copy the built artifacts to the appropriate directory with version numbers
@@ -154,10 +154,10 @@ for file in custom-log4j2-appender-$VERSION.jar custom-log4j2-appender-$VERSION-
 done
 
 # Navigate back to the custom-log4j2-appender directory
-cd "$CURRENT_DIR"
+cd "$CURRENT_DIR/bundle"
 
 # Create a ZIP file containing the entire directory structure
-echo "Creating ZIP file custom-log4j2-appender-$VERSION.zip"
-zip -r custom-log4j2-appender-$VERSION.zip io
-
-echo "Artifacts prepared and zipped successfully. You can now upload custom-log4j2-appender-$VERSION.zip to Sonatype OSSRH."
+echo "Creating jar file custom-log4j2-appender-$VERSION.zip"
+jar -cvf ../bundle-$VERSION.jar *
+cd ..
+echo "Artifacts prepared and zipped successfully. You can now upload bundle-$VERSION.jar to Sonatype OSSRH."

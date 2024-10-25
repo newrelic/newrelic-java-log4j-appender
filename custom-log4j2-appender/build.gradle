@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'com.github.johnrengelman.shadow' version '6.1.0'
     id 'maven-publish'
 }
 
@@ -15,17 +16,21 @@ dependencies {
 }
 
 jar {
+    enabled = false // Disable the standard JAR task
+}
+
+shadowJar {
+    archiveClassifier.set('') // Remove the 'all' classifier
+    mergeServiceFiles()
     manifest {
         attributes(
             'Implementation-Title': 'Custom Log4j2 Appender',
             'Implementation-Vendor': 'New Relic Labs',
             'Implementation-Vendor-Id': 'com.newrelic.labs',
-            'Implementation-Version': '0.0.8'
+            'Implementation-Version': '0.0.7'
         )
     }
 }
-
-
 
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
@@ -41,19 +46,16 @@ task sourcesJar(type: Jar) {
     from sourceSets.main.allSource
 }
 
-
-
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            from components.java // Include standard JAR
-
+            artifact shadowJar // Only include Shadow JAR
             artifact javadocJar
             artifact sourcesJar
 
-            groupId = 'io.github.newrelic-experimental'
+            groupId = 'com.newrelic.labs'
             artifactId = 'custom-log4j2-appender'
-            version = '0.0.8'
+            version = '0.0.7'
 
             pom {
                 name = 'Custom Log4j2 Appender'
