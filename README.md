@@ -26,9 +26,9 @@ Add the library to your project using Maven Central:
 
 ```xml
 <dependency>
-    <groupId>io.github.newrelic-experimental</groupId>
+    <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>0.0.8</version>
+    <version>1.0.1</version>
 </dependency>
 ```
 
@@ -36,9 +36,9 @@ Or, if using a locally built JAR file:
 
 ```xml
 <dependency>
-    <groupId>io.github.newrelic-experimental</groupId>
+    <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>0.0.8</version>
+    <version>1.0.1</version>
     <scope>system</scope>
     <systemPath>${project.basedir}/src/main/resources/custom-log4j2-appender.jar</systemPath>
 </dependency>
@@ -60,19 +60,18 @@ Replace `[your-api-key]` with the ingest key obtained from the New Relic platfor
 <?xml version="1.0" encoding="UTF-8"?>
 <Configuration status="DEBUG" name="cloudhub" packages="com.newrelic.labs">
     <Appenders>
-        <!-- Custom New Relic Batching Appender with Pattern Layout -->
         <NewRelicBatchingAppender name="NewRelicAppender"
-                                  apiKey="[your-api-key]"
+                                  apiKey="YOUR_API_KEY"
                                   apiUrl="https://log-api.newrelic.com/log/v1"
                                   logType="muleLog"
                                   applicationName="your-application-name"
                                   batchSize="5000"
                                   maxMessageSize="1048576"
-                                  flushInterval="120000">
+                                  flushInterval="120000"
+                                  customFields="businessGroup=exampleGroup,environment=production">
             <PatternLayout pattern="[%d{MM-dd HH:mm:ss}] %-5p %c{1} [%t]: %m%n"/>
         </NewRelicBatchingAppender>
     </Appenders>
-
     <Loggers>
         <AsyncRoot level="INFO">
             <AppenderRef ref="NewRelicAppender"/>
@@ -93,6 +92,11 @@ Replace `[your-api-key]` with the ingest key obtained from the New Relic platfor
 | batchSize           | No        | 5000          | Maximum number of log entries to batch together before sending to New Relic |
 | maxMessageSize      | No        | 1048576       | Maximum size (in bytes) of the payload to be sent in a single HTTP request  |
 | flushInterval       | No        | 120000        | Interval (in milliseconds) at which the log entries are flushed to New Relic|
+| customFields        | No        |               | Add extra context to your logs with custom fields, represented as comma-separated name-value pairs.|
+
+
+## Custom Fields [ v1.0.1 + ]
+Custom fields provide a way to include additional custom data in your logs. They are represented as comma-separated name-value pairs. This feature allows you to add more context to your logs, making them more meaningful and easier to analyze.
 
 ### TLS 1.2 Requirement
 
@@ -110,7 +114,8 @@ New Relic only accepts connections from clients using TLS version 1.2 or greater
 
 ## Sample log details at New Relic Platform
 
-<img width="745" alt="image" src="https://github.com/user-attachments/assets/6adff21d-7fdf-4b39-b19e-0ed385ff6ed5">
+<img width="715" alt="image" src="https://github.com/user-attachments/assets/1827277a-a640-44d7-ba5a-bab6b3c0c96a">
+
 
 ## Building
 
