@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # clean existing stuff
-rm -rf build io
+rm -rf build bundle
 # copy correct build.gradle
 cp build-jar.gradle build.gradle
 # Set variables
-GROUP_ID="io.github.newrelic-experimental"
+GROUP_ID="com.newrelic.labs"
 ARTIFACT_ID="custom-log4j2-appender"
 VERSION="0.0.9"
 KEY_ID="0ED9FD74E81E6D83FAE25F235640EA0B1C631C6F" # Replace with your actual key ID
@@ -47,7 +47,7 @@ if [ ! -f "$JAR_FILE" ] || [ ! -f "$JAVADOC_FILE" ] || [ ! -f "$SOURCES_FILE" ];
 fi
 
 # Prepare the directory structure
-TARGET_DIR="$CURRENT_DIR/io/github/newrelic-experimental/custom-log4j2-appender/$VERSION"
+TARGET_DIR="$CURRENT_DIR/bundle"
 mkdir -p $TARGET_DIR
 
 # Copy the built artifacts to the appropriate directory with version numbers
@@ -60,11 +60,12 @@ cp $SOURCES_FILE $TARGET_DIR/custom-log4j2-appender-$VERSION-sources.jar
 cd $TARGET_DIR
 
 # Generate checksums for the copied files
-for file in custom-log4j2-appender-$VERSION.jar custom-log4j2-appender-$VERSION-javadoc.jar custom-log4j2-appender-$VERSION-sources.jar; do
-    echo "Generating checksums for $file"
-    md5sum $file | awk '{ print $1 }' > $file.md5
-    sha1sum $file | awk '{ print $1 }' > $file.sha1
-done
+# for legacy checkusum is not needed and hence commenting
+# for file in custom-log4j2-appender-$VERSION.jar custom-log4j2-appender-$VERSION-javadoc.jar custom-log4j2-appender-$VERSION-sources.jar; do
+   # echo "Generating checksums for $file"
+  #  md5sum $file | awk '{ print $1 }' > $file.md5
+  #  sha1sum $file | awk '{ print $1 }' > $file.sha1
+# done
 
 # Generate GPG signatures using the specific key ID
 for file in custom-log4j2-appender-$VERSION.jar custom-log4j2-appender-$VERSION-javadoc.jar custom-log4j2-appender-$VERSION-sources.jar; do
@@ -135,29 +136,31 @@ POM_CONTENT="${POM_CONTENT//\{\{DEPENDENCIES\}\}/$DEPENDENCIES}"
 echo "$POM_CONTENT" > "$TARGET_DIR/$POM_FILE"
 
 # Generate checksums and signatures for the POM file
-echo "Generating checksums and GPG signature for $POM_FILE"
-md5sum $POM_FILE | awk '{ print $1 }' > $POM_FILE.md5
-sha1sum $POM_FILE | awk '{ print $1 }' > $POM_FILE.sha1
+#  for legacy checkusum is not needed and hence commenting
+# echo "Generating checksums and GPG signature for $POM_FILE"
+# md5sum $POM_FILE | awk '{ print $1 }' > $POM_FILE.md5
+# sha1sum $POM_FILE | awk '{ print $1 }' > $POM_FILE.sha1
 gpg --local-user $KEY_ID --armor --detach-sign $POM_FILE
 
 # Verify checksums
+#  for legacy checkusum is not needed and hence commenting
 echo "Verifying checksums"
-for file in custom-log4j2-appender-$VERSION.jar custom-log4j2-appender-$VERSION-javadoc.jar custom-log4j2-appender-$VERSION-sources.jar $POM_FILE; do
-    if [ -f "$file" ]; then
-        echo "Verifying checksum for $file"
-        md5sum -c <(echo "$(cat $file.md5)  $file")
-        sha1sum -c <(echo "$(cat $file.sha1)  $file")
-    else
-        echo "File $file does not exist in the target directory $TARGET_DIR."
-        ls -la $TARGET_DIR
-    fi
-done
+# for file in custom-log4j2-appender-$VERSION.jar custom-log4j2-appender-$VERSION-javadoc.jar custom-log4j2-appender-$VERSION-sources.jar $POM_FILE; do
+    # if [ -f "$file" ]; then
+    #     echo "Verifying checksum for $file"
+    #     md5sum -c <(echo "$(cat $file.md5)  $file")
+    #     sha1sum -c <(echo "$(cat $file.sha1)  $file")
+   #  else
+      #   echo "File $file does not exist in the target directory $TARGET_DIR."
+      #   ls -la $TARGET_DIR
+   #  fi
+#  done
 
 # Navigate back to the custom-log4j2-appender directory
-cd "$CURRENT_DIR"
+cd "$CURRENT_DIR/bundle"
 
 # Create a ZIP file containing the entire directory structure
-echo "Creating ZIP file custom-log4j2-appender-$VERSION.zip"
-zip -r custom-log4j2-appender-$VERSION.zip io
-
-echo "Artifacts prepared and zipped successfully. You can now upload custom-log4j2-appender-$VERSION.zip to Sonatype OSSRH."
+echo "Creating jar bundle-$VERSION.jar"
+jar -cvf ../bundle-$VERSION.jar *
+cd ..
+echo "Artifacts prepared and zipped successfully. You can now upload bundle-$VERSION.jar to Sonatype OSSRH."

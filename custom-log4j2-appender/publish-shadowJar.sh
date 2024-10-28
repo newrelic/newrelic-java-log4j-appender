@@ -6,7 +6,7 @@ cp build-shadowJar.gradle build.gradle
 # Set variables
 GROUP_ID="io.github.newrelic-experimental"
 ARTIFACT_ID="custom-log4j2-appender"
-VERSION="1.0.0"
+VERSION="0.0.9"
 KEY_ID="0ED9FD74E81E6D83FAE25F235640EA0B1C631C6F" # Replace with your actual key ID
 
 # Get the current directory (assuming the script is run from the custom-log4j2-appender directory)
