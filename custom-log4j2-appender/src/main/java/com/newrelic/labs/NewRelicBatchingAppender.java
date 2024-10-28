@@ -1,9 +1,10 @@
-
 package com.newrelic.labs;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -23,7 +24,6 @@ import org.apache.logging.log4j.core.config.plugins.PluginFactory;
 import org.apache.logging.log4j.core.layout.PatternLayout;
 import org.apache.logging.log4j.status.StatusLogger;
 
-@SuppressWarnings("unused")
 @Plugin(name = "NewRelicBatchingAppender", category = "Core", elementType = "appender", printObject = true)
 public class NewRelicBatchingAppender extends AbstractAppender {
 
@@ -40,6 +40,7 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 	private final int batchSize;
 	private final long maxMessageSize;
 	private final long flushInterval;
+	private final Map<String, String> customFields;
 
 	private static final int DEFAULT_BATCH_SIZE = 5000;
 	private static final long DEFAULT_MAX_MESSAGE_SIZE = 1048576; // 1 MB
@@ -48,7 +49,7 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 
 	protected NewRelicBatchingAppender(String name, Filter filter, Layout<? extends Serializable> layout,
 			final boolean ignoreExceptions, String apiKey, String apiUrl, String applicationName, Integer batchSize,
-			Long maxMessageSize, Long flushInterval, String logType) {
+			Long maxMessageSize, Long flushInterval, String logType, String customFields) {
 		super(name, filter, layout, ignoreExceptions, Property.EMPTY_ARRAY);
 		this.queue = new LinkedBlockingQueue<>();
 		this.apiKey = apiKey;
@@ -59,8 +60,23 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 		this.maxMessageSize = maxMessageSize != null ? maxMessageSize : DEFAULT_MAX_MESSAGE_SIZE;
 		this.flushInterval = flushInterval != null ? flushInterval : DEFAULT_FLUSH_INTERVAL;
 		this.logType = ((logType != null) && (logType.length() > 0)) ? logType : LOG_TYPE;
+		this.customFields = parsecustomFields(customFields);
 		this.logForwarder = new LogForwarder(apiKey, apiUrl, this.maxMessageSize, this.queue);
 		startFlushingTask();
+	}
+
+	private Map<String, String> parsecustomFields(String customFields) {
+		Map<String, String> custom = new HashMap<>();
+		if (customFields != null && !customFields.isEmpty()) {
+			String[] pairs = customFields.split(",");
+			for (String pair : pairs) {
+				String[] keyValue = pair.split("=");
+				if (keyValue.length == 2) {
+					custom.put(keyValue[0], keyValue[1]);
+				}
+			}
+		}
+		return custom;
 	}
 
 	@PluginFactory
@@ -70,7 +86,8 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 			@PluginAttribute("apiUrl") String apiUrl, @PluginAttribute("applicationName") String applicationName,
 			@PluginAttribute(value = "batchSize") Integer batchSize,
 			@PluginAttribute(value = "maxMessageSize") Long maxMessageSize, @PluginAttribute("logType") String logType,
-			@PluginAttribute(value = "flushInterval") Long flushInterval) {
+			@PluginAttribute(value = "flushInterval") Long flushInterval,
+			@PluginAttribute("customFields") String customFields) {
 
 		if (name == null) {
 			logger.error("No name provided for NewRelicBatchingAppender");
@@ -87,7 +104,7 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 		}
 
 		return new NewRelicBatchingAppender(name, filter, layout, true, apiKey, apiUrl, applicationName, batchSize,
-				maxMessageSize, flushInterval, logType);
+				maxMessageSize, flushInterval, logType, customFields);
 	}
 
 	@Override
@@ -107,11 +124,23 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 		logger.debug("Queueing message for New Relic: " + message);
 
 		try {
+			// Extract custom fields from the event context
+			Map<String, Object> custom = new HashMap<>(extractcustom(event));
+			// Add static custom fields from configuration without a prefix
+			for (Map.Entry<String, String> entry : this.customFields.entrySet()) {
+				custom.putIfAbsent(entry.getKey(), entry.getValue());
+			}
 			// Directly add to the queue
-			queue.add(new LogEntry(message, applicationName, muleAppName, logType, timestamp));
+			queue.add(new LogEntry(message, applicationName, muleAppName, logType, timestamp, custom));
 		} catch (Exception e) {
 			logger.error("Unable to insert log entry into log queue. ", e);
 		}
+	}
+
+	private Map<String, Object> extractcustom(LogEvent event) {
+		Map<String, Object> custom = new HashMap<>();
+		event.getContextData().forEach(custom::put);
+		return custom;
 	}
 
 	private String extractMuleAppName(String message) {
