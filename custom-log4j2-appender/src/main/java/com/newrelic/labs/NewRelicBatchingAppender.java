@@ -132,10 +132,23 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 			}
 			// Directly add to the queue
 			queue.add(new LogEntry(message, applicationName, muleAppName, logType, timestamp, custom));
+			// Check if the batch size is reached and flush immediately
+	        if (queue.size() >= batchSize) {
+	            flushQueue();
+	        }
 		} catch (Exception e) {
 			logger.error("Unable to insert log entry into log queue. ", e);
 		}
 	}
+	private void flushQueue() {
+	    List<LogEntry> batch = new ArrayList<>();
+	    queue.drainTo(batch, batchSize);
+	    if (!batch.isEmpty()) {
+	        logger.debug("Flushing {} log entries to New Relic", batch.size());
+	        logForwarder.flush(batch);
+	    }
+	}
+	
 
 	private Map<String, Object> extractcustom(LogEvent event) {
 		Map<String, Object> custom = new HashMap<>();
