@@ -20,7 +20,7 @@ jar {
             'Implementation-Title': 'Custom Log4j2 Appender',
             'Implementation-Vendor': 'New Relic Labs',
             'Implementation-Vendor-Id': 'com.newrelic.labs',
-            'Implementation-Version': '1.0.1'
+            'Implementation-Version': '1.0.2'
         )
     }
 }
@@ -53,7 +53,7 @@ publishing {
 
             groupId = 'com.newrelic.labs'
             artifactId = 'custom-log4j2-appender'
-            version = '1.0.1'
+            version = '1.0.2'
 
             pom {
                 name = 'Custom Log4j2 Appender'
