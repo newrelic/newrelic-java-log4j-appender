@@ -18,7 +18,7 @@
 
 # New Relic Log4j2 Appender
 
-A custom Log4j2 appender that sends logs to New Relic.
+A custom Log4j2 appender that sends logs to New Relic. This appender supports both plain text log messages and JSON log objects.
 
 ## Installation
 
@@ -28,7 +28,7 @@ Add the library to your project using Maven Central:
 <dependency>
     <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -38,7 +38,7 @@ Or, if using a locally built JAR file:
 <dependency>
     <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
     <scope>system</scope>
     <systemPath>${project.basedir}/src/main/resources/custom-log4j2-appender.jar</systemPath>
 </dependency>
