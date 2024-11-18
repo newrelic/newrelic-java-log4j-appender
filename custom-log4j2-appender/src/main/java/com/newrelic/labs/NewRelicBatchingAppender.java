@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -33,6 +34,7 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 	private final String apiUrl;
 	private final String applicationName;
 	private final String logType;
+	private final boolean mergeCustomFields;
 	private final String name;
 	private final LogForwarder logForwarder;
 	private static final Logger logger = StatusLogger.getLogger();
@@ -40,16 +42,18 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 	private final int batchSize;
 	private final long maxMessageSize;
 	private final long flushInterval;
-	private final Map<String, String> customFields;
+	private final Map<String, Object> customFields;
 
 	private static final int DEFAULT_BATCH_SIZE = 5000;
 	private static final long DEFAULT_MAX_MESSAGE_SIZE = 1048576; // 1 MB
 	private static final long DEFAULT_FLUSH_INTERVAL = 120000; // 2 minutes
 	private static final String LOG_TYPE = "muleLog"; // defaultType
+	private static final boolean MERGE_CUSTOM_FIELDS = false; // by default there will be a separate field custom block
+																// for custom fields i.e. custom.attribute1
 
 	protected NewRelicBatchingAppender(String name, Filter filter, Layout<? extends Serializable> layout,
 			final boolean ignoreExceptions, String apiKey, String apiUrl, String applicationName, Integer batchSize,
-			Long maxMessageSize, Long flushInterval, String logType, String customFields) {
+			Long maxMessageSize, Long flushInterval, String logType, String customFields, Boolean mergeCustomFields) {
 		super(name, filter, layout, ignoreExceptions, Property.EMPTY_ARRAY);
 		this.queue = new LinkedBlockingQueue<>();
 		this.apiKey = apiKey;
@@ -61,12 +65,13 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 		this.flushInterval = flushInterval != null ? flushInterval : DEFAULT_FLUSH_INTERVAL;
 		this.logType = ((logType != null) && (logType.length() > 0)) ? logType : LOG_TYPE;
 		this.customFields = parsecustomFields(customFields);
+		this.mergeCustomFields = mergeCustomFields != null ? mergeCustomFields : MERGE_CUSTOM_FIELDS;
 		this.logForwarder = new LogForwarder(apiKey, apiUrl, this.maxMessageSize, this.queue);
 		startFlushingTask();
 	}
 
-	private Map<String, String> parsecustomFields(String customFields) {
-		Map<String, String> custom = new HashMap<>();
+	private Map<String, Object> parsecustomFields(String customFields) {
+		Map<String, Object> custom = new HashMap<>();
 		if (customFields != null && !customFields.isEmpty()) {
 			String[] pairs = customFields.split(",");
 			for (String pair : pairs) {
@@ -87,7 +92,8 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 			@PluginAttribute(value = "batchSize") Integer batchSize,
 			@PluginAttribute(value = "maxMessageSize") Long maxMessageSize, @PluginAttribute("logType") String logType,
 			@PluginAttribute(value = "flushInterval") Long flushInterval,
-			@PluginAttribute("customFields") String customFields) {
+			@PluginAttribute("customFields") String customFields,
+			@PluginAttribute(value = "mergeCustomFields") Boolean mergeCustomFields) {
 
 		if (name == null) {
 			logger.error("No name provided for NewRelicBatchingAppender");
@@ -104,7 +110,7 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 		}
 
 		return new NewRelicBatchingAppender(name, filter, layout, true, apiKey, apiUrl, applicationName, batchSize,
-				maxMessageSize, flushInterval, logType, customFields);
+				maxMessageSize, flushInterval, logType, customFields, mergeCustomFields);
 	}
 
 	@Override
@@ -127,28 +133,29 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 			// Extract custom fields from the event context
 			Map<String, Object> custom = new HashMap<>(extractcustom(event));
 			// Add static custom fields from configuration without a prefix
-			for (Map.Entry<String, String> entry : this.customFields.entrySet()) {
+			for (Entry<String, Object> entry : this.customFields.entrySet()) {
 				custom.putIfAbsent(entry.getKey(), entry.getValue());
 			}
 			// Directly add to the queue
-			queue.add(new LogEntry(message, applicationName, muleAppName, logType, timestamp, custom));
+			queue.add(
+					new LogEntry(message, applicationName, muleAppName, logType, timestamp, custom, mergeCustomFields));
 			// Check if the batch size is reached and flush immediately
-	        if (queue.size() >= batchSize) {
-	            flushQueue();
-	        }
+			if (queue.size() >= batchSize) {
+				flushQueue();
+			}
 		} catch (Exception e) {
 			logger.error("Unable to insert log entry into log queue. ", e);
 		}
 	}
+
 	private void flushQueue() {
-	    List<LogEntry> batch = new ArrayList<>();
-	    queue.drainTo(batch, batchSize);
-	    if (!batch.isEmpty()) {
-	        logger.debug("Flushing {} log entries to New Relic", batch.size());
-	        logForwarder.flush(batch);
-	    }
+		List<LogEntry> batch = new ArrayList<>();
+		queue.drainTo(batch, batchSize);
+		if (!batch.isEmpty()) {
+			logger.debug("Flushing {} log entries to New Relic", batch.size());
+			logForwarder.flush(batch, mergeCustomFields, customFields);
+		}
 	}
-	
 
 	private Map<String, Object> extractcustom(LogEvent event) {
 		Map<String, Object> custom = new HashMap<>();
@@ -182,7 +189,7 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 						queue.drainTo(batch, batchSize);
 						if (!batch.isEmpty()) {
 							logger.debug("Flushing {} log entries to New Relic", batch.size());
-							logForwarder.flush(batch);
+							logForwarder.flush(batch, mergeCustomFields, customFields);
 						}
 						Thread.sleep(flushInterval);
 					} catch (InterruptedException e) {
@@ -209,7 +216,7 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 		setStopping();
 		final boolean stopped = super.stop(timeout, timeUnit, false);
 		try {
-			logForwarder.close();
+			logForwarder.close(mergeCustomFields, customFields);
 		} catch (Exception e) {
 			logger.error("Unable to close appender", e);
 		}
