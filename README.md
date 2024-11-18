@@ -94,7 +94,7 @@ Replace `[your-api-key]` with the ingest key obtained from the New Relic platfor
 | maxMessageSize      | No        | 1048576       | Maximum size (in bytes) of the payload to be sent in a single HTTP request  |
 | flushInterval       | No        | 120000        | Interval (in milliseconds) at which the log entries are flushed to New Relic|
 | customFields        | No        |               | Add extra context to your logs with custom fields, represented as comma-separated name-value pairs.|
-| mergeCustomFields   | No        | false         | (Default: false) All custom fields will be available as `custom.feild1`, `custom.field2` else `feild1` , `feild2` will be available as the main attributes |
+| mergeCustomFields   | No        | false         | (Default: false) All custom fields will be available as `custom.field1`, `custom.field2` else `field1` , `field2` will be available as the main attributes |
 
 
 
