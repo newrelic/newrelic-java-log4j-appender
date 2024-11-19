@@ -8,16 +8,16 @@ public class LogEntry {
 	private final String name;
 	private final String logtype;
 	private final long timestamp;
-	private final Map<String, Object> custom; // Add custom fields
+
 
 	public LogEntry(String message, String applicationName, String name, String logtype, long timestamp,
-			Map<String, Object> custom) {
+			Map<String, Object> custom, boolean mergeCustomFields) {
 		this.message = message;
 		this.applicationName = applicationName;
 		this.name = name;
 		this.logtype = logtype;
 		this.timestamp = timestamp;
-		this.custom = custom; // Initialize custom fields
+
 	}
 
 	public String getMessage() {
@@ -38,9 +38,5 @@ public class LogEntry {
 
 	public long getTimestamp() {
 		return timestamp;
-	}
-
-	public Map<String, Object> getcustom() {
-		return custom;
 	}
 }

@@ -37,7 +37,7 @@ public class LogForwarder {
 		return apiKey != null && apiURL != null;
 	}
 
-	public void flush(List<LogEntry> logEntries) {
+	public void flush(List<LogEntry> logEntries, boolean mergeCustomFields, Map<String, Object> customFields) {
 		InetAddress localhost = null;
 		try {
 			localhost = InetAddress.getLocalHost();
@@ -59,8 +59,17 @@ public class LogForwarder {
 				logEvent.put("source", "NRBatchingAppender");
 
 				// Add custom fields
-				if (entry.getcustom() != null) {
-					logEvent.put("custom", entry.getcustom());
+				if (customFields != null) {
+					if (mergeCustomFields) {
+						// Traverse all keys and add each field separately
+						Map<String, Object> customFields1 = customFields;
+						for (Map.Entry<String, Object> field : customFields1.entrySet()) {
+							logEvent.put(field.getKey(), field.getValue());
+						}
+					} else {
+						// Directly add the custom fields as a single entry
+						logEvent.put("custom", customFields);
+					}
 				}
 
 				logEvents.add(logEvent);
@@ -70,7 +79,7 @@ public class LogForwarder {
 			byte[] compressedPayload = gzipCompress(jsonPayload);
 
 			if (compressedPayload.length > maxMessageSize) {
-				splitAndSendLogs(logEntries);
+				splitAndSendLogs(logEntries, mergeCustomFields, customFields);
 			} else {
 				sendLogs(logEvents);
 			}
@@ -79,14 +88,37 @@ public class LogForwarder {
 		}
 	}
 
-	private void splitAndSendLogs(List<LogEntry> logEntries) throws IOException {
+	private void splitAndSendLogs(List<LogEntry> logEntries, boolean mergeCustomFields,
+			Map<String, Object> customFields) throws IOException {
 		List<LogEntry> subBatch = new ArrayList<>();
 		int currentSize = 0;
 		for (LogEntry entry : logEntries) {
-			String entryJson = objectMapper.writeValueAsString(entry);
+			Map<String, Object> logEvent = objectMapper.convertValue(entry, LowercaseKeyMap.class);
+			logEvent.put("hostname", InetAddress.getLocalHost().getHostName());
+			logEvent.put("logtype", entry.getLogType());
+			logEvent.put("timestamp", entry.getTimestamp());
+			logEvent.put("applicationName", entry.getApplicationName());
+			logEvent.put("name", entry.getName());
+			logEvent.put("source", "NRBatchingAppender");
+
+			// Add custom fields
+			if (customFields != null) {
+				if (mergeCustomFields) {
+					// Traverse all keys and add each field separately
+					Map<String, Object> customFields1 = customFields;
+					for (Map.Entry<String, Object> field : customFields1.entrySet()) {
+						logEvent.put(field.getKey(), field.getValue());
+					}
+				} else {
+					// Directly add the custom fields as a single entry
+					logEvent.put("custom", customFields);
+				}
+			}
+
+			String entryJson = objectMapper.writeValueAsString(logEvent);
 			int entrySize = gzipCompress(entryJson).length;
 			if (currentSize + entrySize > maxMessageSize) {
-				sendLogs(convertToLogEvents(subBatch));
+				sendLogs(convertToLogEvents(subBatch, mergeCustomFields, customFields));
 				subBatch.clear();
 				currentSize = 0;
 			}
@@ -94,11 +126,12 @@ public class LogForwarder {
 			currentSize += entrySize;
 		}
 		if (!subBatch.isEmpty()) {
-			sendLogs(convertToLogEvents(subBatch));
+			sendLogs(convertToLogEvents(subBatch, mergeCustomFields, customFields));
 		}
 	}
 
-	private List<Map<String, Object>> convertToLogEvents(List<LogEntry> logEntries) {
+	private List<Map<String, Object>> convertToLogEvents(List<LogEntry> logEntries, boolean mergeCustomFields,
+			Map<String, Object> customFields) {
 		List<Map<String, Object>> logEvents = new ArrayList<>();
 		try {
 			InetAddress localhost = InetAddress.getLocalHost();
@@ -114,9 +147,17 @@ public class LogForwarder {
 				logEvent.put("source", "NRBatchingAppender");
 
 				// Add custom fields
-				// Add custom fields
-				if (entry.getcustom() != null) {
-					logEvent.put("custom", entry.getcustom());
+				if (customFields != null) {
+					if (mergeCustomFields) {
+						// Traverse all keys and add each field separately
+						Map<String, Object> customFields1 = customFields;
+						for (Map.Entry<String, Object> field : customFields1.entrySet()) {
+							logEvent.put(field.getKey(), field.getValue());
+						}
+					} else {
+						// Directly add the custom fields as a single entry
+						logEvent.put("custom", customFields);
+					}
 				}
 
 				logEvents.add(logEvent);
@@ -176,12 +217,12 @@ public class LogForwarder {
 		return bos.toByteArray();
 	}
 
-	public void close() {
+	public void close(boolean mergeCustomFields, Map<String, Object> customFields) {
 		List<LogEntry> remainingLogs = new ArrayList<>();
 		logQueue.drainTo(remainingLogs);
 		if (!remainingLogs.isEmpty()) {
 			System.out.println("Flushing remaining " + remainingLogs.size() + " log events to New Relic...");
-			flush(remainingLogs);
+			flush(remainingLogs, mergeCustomFields, customFields);
 		}
 	}
 }

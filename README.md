@@ -18,7 +18,7 @@
 
 # New Relic Log4j2 Appender
 
-A custom Log4j2 appender that sends logs to New Relic.
+A custom Log4j2 appender that sends logs to New Relic. This appender supports both plain text log messages and JSON log objects.
 
 ## Installation
 
@@ -28,7 +28,7 @@ Add the library to your project using Maven Central:
 <dependency>
     <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
 </dependency>
 ```
 
@@ -38,7 +38,7 @@ Or, if using a locally built JAR file:
 <dependency>
     <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
     <scope>system</scope>
     <systemPath>${project.basedir}/src/main/resources/custom-log4j2-appender.jar</systemPath>
 </dependency>
@@ -68,7 +68,8 @@ Replace `[your-api-key]` with the ingest key obtained from the New Relic platfor
                                   batchSize="5000"
                                   maxMessageSize="1048576"
                                   flushInterval="120000"
-                                  customFields="businessGroup=exampleGroup,environment=production">
+                                  customFields="businessGroup=exampleGroup,environment=production"
+                                  mergeCustomFields="true">
             <PatternLayout pattern="[%d{MM-dd HH:mm:ss}] %-5p %c{1} [%t]: %m%n"/>
         </NewRelicBatchingAppender>
     </Appenders>
@@ -93,10 +94,17 @@ Replace `[your-api-key]` with the ingest key obtained from the New Relic platfor
 | maxMessageSize      | No        | 1048576       | Maximum size (in bytes) of the payload to be sent in a single HTTP request  |
 | flushInterval       | No        | 120000        | Interval (in milliseconds) at which the log entries are flushed to New Relic|
 | customFields        | No        |               | Add extra context to your logs with custom fields, represented as comma-separated name-value pairs.|
+| mergeCustomFields   | No        | false         | (Default: false) All custom fields will be available as `custom.field1`, `custom.field2` else `field1` , `field2` will be available as the main attributes |
+
 
 
 ## Custom Fields [ v1.0.1 + ]
 Custom fields provide a way to include additional custom data in your logs. They are represented as comma-separated name-value pairs. This feature allows you to add more context to your logs, making them more meaningful and easier to analyze.
+
+## Configuring Custom Fields as Subfields of Custom Fields [v1.0.3+]
+Starting from version 1.0.3, a new configuration parameter `mergeCustomFields` has been added. By default, all custom fields will be available as subfields under the `custom` field (e.g., `custom.field1`, `custom.field2`). If `mergeCustomFields` is set to `true`, custom fields will be available as main attributes (e.g., `field1`, `field2`).
+
+
 
 ### TLS 1.2 Requirement
 
