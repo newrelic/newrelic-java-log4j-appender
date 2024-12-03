@@ -198,15 +198,35 @@ public class LogForwarder {
 	}
 
 	private void requeueLogs(List<Map<String, Object>> logEvents) {
+
 		for (Map<String, Object> logEvent : logEvents) {
 			try {
+				// Log the contents of logEvent
+				// System.out.println("logEvent: " + logEvent);
+
+				// Convert logEvent to LogEntry
 				LogEntry logEntry = objectMapper.convertValue(logEvent, LogEntry.class);
-				logQueue.put(logEntry); // Requeue the log entry
+
+				// Log the contents of the converted LogEntry
+				// System.out.println("Converted LogEntry: ");
+				// System.out.println(" message: " + logEntry.getMessage());
+				// System.out.println(" applicationName: " + logEntry.getApplicationName());
+				// System.out.println(" name: " + logEntry.getName());
+				// System.out.println(" logtype: " + logEntry.getLogType());
+				// System.out.println(" timestamp: " + logEntry.getTimestamp());
+
+				// Requeue the log entry
+				logQueue.put(logEntry);
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
 				System.err.println("Failed to requeue log entry: " + logEvent);
+			} catch (IllegalArgumentException e) {
+				System.err.println("Failed to convert log event to LogEntry: " + logEvent);
 			}
 		}
+
+		System.err.println("Network issue - NewRelicBatchingAppenderhas re-queued " + logEvents.size() + " entries"
+				+ " : queue size " + logQueue.size());
 	}
 
 	private byte[] gzipCompress(String input) throws IOException {

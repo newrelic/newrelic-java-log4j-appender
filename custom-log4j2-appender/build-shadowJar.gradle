@@ -27,7 +27,7 @@ shadowJar {
             'Implementation-Title': 'Custom Log4j2 Appender',
             'Implementation-Vendor': 'New Relic Labs',
             'Implementation-Vendor-Id': 'com.newrelic.labs',
-            'Implementation-Version': '1.0.3'
+            'Implementation-Version': '1.0.4'
         )
     }
 }
@@ -55,7 +55,7 @@ publishing {
 
             groupId = 'com.newrelic.labs'
             artifactId = 'custom-log4j2-appender'
-            version = '1.0.3'
+            version = '1.0.4'
 
             pom {
                 name = 'Custom Log4j2 Appender'
