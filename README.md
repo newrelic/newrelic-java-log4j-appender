@@ -28,7 +28,7 @@ Add the library to your project using Maven Central:
 <dependency>
     <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>1.0.4</version>
+    <version>1.0.5</version>
 </dependency>
 ```
 
@@ -38,7 +38,7 @@ Or, if using a locally built JAR file:
 <dependency>
     <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>1.0.4</version>
+    <version>1.0.5</version>
     <scope>system</scope>
     <systemPath>${project.basedir}/src/main/resources/custom-log4j2-appender.jar</systemPath>
 </dependency>
@@ -69,7 +69,9 @@ Replace `[your-api-key]` with the ingest key obtained from the New Relic platfor
                                   maxMessageSize="1048576"
                                   flushInterval="120000"
                                   customFields="businessGroup=exampleGroup,environment=production"
-                                  mergeCustomFields="true">
+                                  mergeCustomFields="true"
+                                  maxRetries="5"
+                                  timeout="5000">
             <PatternLayout pattern="[%d{MM-dd HH:mm:ss}] %-5p %c{1} [%t]: %m%n"/>
         </NewRelicBatchingAppender>
     </Appenders>
@@ -95,6 +97,8 @@ Replace `[your-api-key]` with the ingest key obtained from the New Relic platfor
 | flushInterval       | No        | 120000        | Interval (in milliseconds) at which the log entries are flushed to New Relic|
 | customFields        | No        |               | Add extra context to your logs with custom fields, represented as comma-separated name-value pairs.|
 | mergeCustomFields   | No        | false         | (Default: false) All custom fields will be available as `custom.field1`, `custom.field2` else `field1` , `field2` will be available as the main attributes |
+| maxRetries          | No        | 3             | Maximum number of retry attempts for sending logs. If logs cannot be sent successfully within the specified retries, they will be discarded. |
+| timeout             | No        | 30000         | Connection timeout (in milliseconds) for HTTP requests to New Relic's logging service. Adjust based on network conditions and server response times. |
 
 
 
