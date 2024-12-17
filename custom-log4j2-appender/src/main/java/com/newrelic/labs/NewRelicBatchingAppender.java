@@ -38,11 +38,13 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 	private final String name;
 	private final LogForwarder logForwarder;
 	private static final Logger logger = StatusLogger.getLogger();
+	private int attempt = 0; // Track attempts across harvest cycles
 
 	private final int batchSize;
 	private final long maxMessageSize;
 	private final long flushInterval;
 	private final Map<String, Object> customFields;
+	private final int maxRetries;
 
 	private static final int DEFAULT_BATCH_SIZE = 5000;
 	private static final long DEFAULT_MAX_MESSAGE_SIZE = 1048576; // 1 MB
@@ -53,20 +55,22 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 
 	protected NewRelicBatchingAppender(String name, Filter filter, Layout<? extends Serializable> layout,
 			final boolean ignoreExceptions, String apiKey, String apiUrl, String applicationName, Integer batchSize,
-			Long maxMessageSize, Long flushInterval, String logType, String customFields, Boolean mergeCustomFields) {
+			Long maxMessageSize, Long flushInterval, String logType, String customFields, Boolean mergeCustomFields,
+			int maxRetries, long timeout) {
 		super(name, filter, layout, ignoreExceptions, Property.EMPTY_ARRAY);
 		this.queue = new LinkedBlockingQueue<>();
 		this.apiKey = apiKey;
 		this.apiUrl = apiUrl;
 		this.applicationName = applicationName;
 		this.name = name;
+		this.maxRetries = maxRetries;
 		this.batchSize = batchSize != null ? batchSize : DEFAULT_BATCH_SIZE;
 		this.maxMessageSize = maxMessageSize != null ? maxMessageSize : DEFAULT_MAX_MESSAGE_SIZE;
 		this.flushInterval = flushInterval != null ? flushInterval : DEFAULT_FLUSH_INTERVAL;
 		this.logType = ((logType != null) && (logType.length() > 0)) ? logType : LOG_TYPE;
 		this.customFields = parsecustomFields(customFields);
 		this.mergeCustomFields = mergeCustomFields != null ? mergeCustomFields : MERGE_CUSTOM_FIELDS;
-		this.logForwarder = new LogForwarder(apiKey, apiUrl, this.maxMessageSize, this.queue);
+		this.logForwarder = new LogForwarder(apiKey, apiUrl, this.maxMessageSize, this.queue, maxRetries, timeout);
 		startFlushingTask();
 	}
 
@@ -93,7 +97,9 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 			@PluginAttribute(value = "maxMessageSize") Long maxMessageSize, @PluginAttribute("logType") String logType,
 			@PluginAttribute(value = "flushInterval") Long flushInterval,
 			@PluginAttribute("customFields") String customFields,
-			@PluginAttribute(value = "mergeCustomFields") Boolean mergeCustomFields) {
+			@PluginAttribute(value = "mergeCustomFields") Boolean mergeCustomFields,
+			@PluginAttribute(value = "maxRetries") Integer maxRetries,
+			@PluginAttribute(value = "timeout") Long timeout) {
 
 		if (name == null) {
 			logger.error("No name provided for NewRelicBatchingAppender");
@@ -109,8 +115,11 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 			return null;
 		}
 
+		int retries = maxRetries != null ? maxRetries : 3; // Default to 3 retries if not specified
+		long connectionTimeout = timeout != null ? timeout : 30000; // Default to 30 seconds if not specified
+
 		return new NewRelicBatchingAppender(name, filter, layout, true, apiKey, apiUrl, applicationName, batchSize,
-				maxMessageSize, flushInterval, logType, customFields, mergeCustomFields);
+				maxMessageSize, flushInterval, logType, customFields, mergeCustomFields, retries, connectionTimeout);
 	}
 
 	@Override
@@ -141,20 +150,35 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 					new LogEntry(message, applicationName, muleAppName, logType, timestamp, custom, mergeCustomFields));
 			// Check if the batch size is reached and flush immediately
 			if (queue.size() >= batchSize) {
-				flushQueue();
+				if (attempt == 0) {
+					boolean bStatus = flushQueue();
+					if (!bStatus) {
+						attempt++;
+						logger.warn("Attempt {} failed. Retrying in next harvest cycle...", attempt);
+						logger.warn("batchsize check is now disabled due to unhealthy connection");
+					} else {
+						logger.debug("Batchsize-check: Successfully sent logs.");
+					}
+				} else {
+					logger.debug(
+							"Skipping {}/{} sending log entries to New Relic ( batchsize check )  - harvest cycle did not report healthy connection",
+							batchSize, queue.size());
+				}
 			}
 		} catch (Exception e) {
 			logger.error("Unable to insert log entry into log queue. ", e);
 		}
 	}
 
-	private void flushQueue() {
+	private boolean flushQueue() {
 		List<LogEntry> batch = new ArrayList<>();
+		boolean bStatus = false;
 		queue.drainTo(batch, batchSize);
 		if (!batch.isEmpty()) {
-			logger.debug("Flushing {} log entries to New Relic", batch.size());
-			logForwarder.flush(batch, mergeCustomFields, customFields);
+			logger.debug("Flushing {}/{} log entries to New Relic", batch.size(), queue.size() + batch.size());
+			bStatus = logForwarder.flush(batch, mergeCustomFields, customFields);
 		}
+		return bStatus;
 	}
 
 	private Map<String, Object> extractcustom(LogEvent event) {
@@ -180,6 +204,7 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 
 	private void startFlushingTask() {
 		Runnable flushTask = new Runnable() {
+
 			@Override
 			public void run() {
 				while (true) {
@@ -187,14 +212,36 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 						logger.debug("Flushing task running...");
 						List<LogEntry> batch = new ArrayList<>();
 						queue.drainTo(batch, batchSize);
+
 						if (!batch.isEmpty()) {
-							logger.debug("Flushing {} log entries to New Relic", batch.size());
-							logForwarder.flush(batch, mergeCustomFields, customFields);
+							logger.debug("Flushing {}/{} log entries to New Relic", batch.size(),
+									queue.size() + batch.size());
+							boolean success = logForwarder.flush(batch, mergeCustomFields, customFields);
+
+							if (success) {
+								logger.debug("Harvest Cycle: Successfully sent logs.");
+								attempt = 0; // Reset attempt counter on success
+							} else {
+								attempt++;
+								logger.warn("Attempt {} failed. Retrying in next cycle...", attempt);
+							}
+
+							if (attempt >= maxRetries) {
+								logger.error("Exhausted all retry attempts across cycles. Discarding {} logs.",
+										queue.size());
+								queue.clear(); // Clear the queue after maxRetries
+								attempt = 0; // Reset attempt counter after discarding
+
+								logger.debug("Queue Size: {} ", queue.size());
+							}
 						}
+
+						// Wait for the next harvest cycle
 						Thread.sleep(flushInterval);
 					} catch (InterruptedException e) {
 						Thread.currentThread().interrupt();
 						logger.error("Flushing task interrupted", e);
+						break;
 					}
 				}
 			}

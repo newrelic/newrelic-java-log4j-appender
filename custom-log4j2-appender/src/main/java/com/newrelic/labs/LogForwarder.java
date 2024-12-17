@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPOutputStream;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,23 +23,34 @@ public class LogForwarder {
 	private final BlockingQueue<LogEntry> logQueue;
 	private final String apiKey;
 	private final String apiURL;
-	private final OkHttpClient client = new OkHttpClient();
-	private final ObjectMapper objectMapper = new ObjectMapper();
+	private final OkHttpClient client;
+	private final ObjectMapper objectMapper;
 	private final long maxMessageSize;
+	// 1.0.5
+	private final int maxRetries;
+	private final long timeout; // New parameter for connection timeout
+	// 1.0.5
 
-	public LogForwarder(String apiKey, String apiURL, long maxMessageSize, BlockingQueue<LogEntry> logQueue) {
+	public LogForwarder(String apiKey, String apiURL, long maxMessageSize, BlockingQueue<LogEntry> logQueue,
+			int maxRetries, long timeout) {
 		this.apiKey = apiKey;
 		this.apiURL = apiURL;
 		this.maxMessageSize = maxMessageSize;
 		this.logQueue = logQueue;
+		this.maxRetries = maxRetries;
+		this.timeout = timeout;
+		this.client = new OkHttpClient.Builder().connectTimeout(timeout, TimeUnit.MILLISECONDS).build();
+		this.objectMapper = new ObjectMapper();
+
 	}
 
 	public boolean isInitialized() {
 		return apiKey != null && apiURL != null;
 	}
 
-	public void flush(List<LogEntry> logEntries, boolean mergeCustomFields, Map<String, Object> customFields) {
+	public boolean flush(List<LogEntry> logEntries, boolean mergeCustomFields, Map<String, Object> customFields) {
 		InetAddress localhost = null;
+		boolean bStatus = false;
 		try {
 			localhost = InetAddress.getLocalHost();
 		} catch (UnknownHostException e) {
@@ -79,19 +91,25 @@ public class LogForwarder {
 			byte[] compressedPayload = gzipCompress(jsonPayload);
 
 			if (compressedPayload.length > maxMessageSize) {
-				splitAndSendLogs(logEntries, mergeCustomFields, customFields);
+				// System.out.println("splitAndSendLogs: Called size exceeded " +
+				// compressedPayload.length);
+				bStatus = splitAndSendLogs(logEntries, mergeCustomFields, customFields);
 			} else {
-				sendLogs(logEvents);
+				bStatus = sendLogs(logEvents);
 			}
 		} catch (IOException e) {
 			System.err.println("Error during log forwarding: " + e.getMessage());
+			bStatus = false;
 		}
+		return bStatus;
 	}
 
-	private void splitAndSendLogs(List<LogEntry> logEntries, boolean mergeCustomFields,
+	private boolean splitAndSendLogs(List<LogEntry> logEntries, boolean mergeCustomFields,
 			Map<String, Object> customFields) throws IOException {
+
 		List<LogEntry> subBatch = new ArrayList<>();
 		int currentSize = 0;
+		boolean bStatus = false;
 		for (LogEntry entry : logEntries) {
 			Map<String, Object> logEvent = objectMapper.convertValue(entry, LowercaseKeyMap.class);
 			logEvent.put("hostname", InetAddress.getLocalHost().getHostName());
@@ -118,7 +136,7 @@ public class LogForwarder {
 			String entryJson = objectMapper.writeValueAsString(logEvent);
 			int entrySize = gzipCompress(entryJson).length;
 			if (currentSize + entrySize > maxMessageSize) {
-				sendLogs(convertToLogEvents(subBatch, mergeCustomFields, customFields));
+				bStatus = sendLogs(convertToLogEvents(subBatch, mergeCustomFields, customFields));
 				subBatch.clear();
 				currentSize = 0;
 			}
@@ -126,8 +144,9 @@ public class LogForwarder {
 			currentSize += entrySize;
 		}
 		if (!subBatch.isEmpty()) {
-			sendLogs(convertToLogEvents(subBatch, mergeCustomFields, customFields));
+			bStatus = sendLogs(convertToLogEvents(subBatch, mergeCustomFields, customFields));
 		}
+		return bStatus;
 	}
 
 	private List<Map<String, Object>> convertToLogEvents(List<LogEntry> logEntries, boolean mergeCustomFields,
@@ -168,7 +187,7 @@ public class LogForwarder {
 		return logEvents;
 	}
 
-	private void sendLogs(List<Map<String, Object>> logEvents) throws IOException {
+	private boolean sendLogs(List<Map<String, Object>> logEvents) throws IOException {
 		String jsonPayload = objectMapper.writeValueAsString(logEvents);
 		byte[] compressedPayload = gzipCompress(jsonPayload);
 
@@ -183,6 +202,7 @@ public class LogForwarder {
 				System.err.println("Failed to send logs to New Relic: " + response.code() + " - " + response.message());
 				System.err.println("Response body: " + response.body().string());
 				requeueLogs(logEvents); // Requeue logs if the response is not successful
+				return false;
 			} else {
 				// Comment out the following lines to prevent infinite loop
 				// LocalDateTime timestamp = LocalDateTime.now();
@@ -194,7 +214,9 @@ public class LogForwarder {
 		} catch (IOException e) {
 			System.err.println("Error during log forwarding: " + e.getMessage());
 			requeueLogs(logEvents); // Requeue logs if an exception occurs
+			return false;
 		}
+		return true;
 	}
 
 	private void requeueLogs(List<Map<String, Object>> logEvents) {
