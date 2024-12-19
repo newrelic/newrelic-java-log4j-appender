@@ -50,7 +50,7 @@ Or, if using a locally built JAR file:
 
 Follow the instructions for setting up the New Relic Log4j2 Appender.
 
-### Log4J XML Configuration
+### Log4J2 XML Configuration
 
 Replace `[your-api-key]` with the ingest key obtained from the New Relic platform.
 
@@ -71,7 +71,7 @@ Replace `[your-api-key]` with the ingest key obtained from the New Relic platfor
                                   customFields="businessGroup=exampleGroup,environment=production"
                                   mergeCustomFields="true"
                                   maxRetries="5"
-                                  timeout="5000">
+                                  timeout="15000">
             <PatternLayout pattern="[%d{MM-dd HH:mm:ss}] %-5p %c{1} [%t]: %m%n"/>
         </NewRelicBatchingAppender>
     </Appenders>
