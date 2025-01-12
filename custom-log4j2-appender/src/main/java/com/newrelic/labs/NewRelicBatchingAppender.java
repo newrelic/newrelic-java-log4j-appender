@@ -6,8 +6,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -28,7 +26,9 @@ import org.apache.logging.log4j.status.StatusLogger;
 @Plugin(name = "NewRelicBatchingAppender", category = "Core", elementType = "appender", printObject = true)
 public class NewRelicBatchingAppender extends AbstractAppender {
 
-	private final BlockingQueue<LogEntry> queue;
+	// private final BlockingQueue<LogEntry> queue;
+
+	private final NRBufferWithFifoEviction<LogEntry> queue; // 1.0.6
 
 	private final String apiKey;
 	private final String apiUrl;
@@ -43,30 +43,35 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 	private final int batchSize;
 	private final long maxMessageSize;
 	private final long flushInterval;
+	private final long queueCapacity;
 	private final Map<String, Object> customFields;
 	private final int maxRetries;
 
 	private static final int DEFAULT_BATCH_SIZE = 5000;
+	private static final int DEFAULT_MAX_RETRIES = 3;
 	private static final long DEFAULT_MAX_MESSAGE_SIZE = 1048576; // 1 MB
 	private static final long DEFAULT_FLUSH_INTERVAL = 120000; // 2 minutes
 	private static final String LOG_TYPE = "muleLog"; // defaultType
 	private static final boolean MERGE_CUSTOM_FIELDS = false; // by default there will be a separate field custom block
 																// for custom fields i.e. custom.attribute1
+	private static final long DEFAULT_MAX_QUEUE_SIZE_BYTES = 2097152; // 2 MB // 1.0.6
 
 	protected NewRelicBatchingAppender(String name, Filter filter, Layout<? extends Serializable> layout,
 			final boolean ignoreExceptions, String apiKey, String apiUrl, String applicationName, Integer batchSize,
-			Long maxMessageSize, Long flushInterval, String logType, String customFields, Boolean mergeCustomFields,
-			int maxRetries, long timeout) {
+			Long maxMessageSize, Long flushInterval, Long queueCapacity, String logType, String customFields,
+			Boolean mergeCustomFields, int maxRetries, long timeout) {
 		super(name, filter, layout, ignoreExceptions, Property.EMPTY_ARRAY);
-		this.queue = new LinkedBlockingQueue<>();
+		this.queueCapacity = queueCapacity != null && queueCapacity > 0 ? queueCapacity : DEFAULT_MAX_QUEUE_SIZE_BYTES;
+		this.queue = new NRBufferWithFifoEviction<>(this.queueCapacity, logEntry -> logEntry.getMessage().length());// 1.0.6
 		this.apiKey = apiKey;
 		this.apiUrl = apiUrl;
 		this.applicationName = applicationName;
 		this.name = name;
-		this.maxRetries = maxRetries;
-		this.batchSize = batchSize != null ? batchSize : DEFAULT_BATCH_SIZE;
-		this.maxMessageSize = maxMessageSize != null ? maxMessageSize : DEFAULT_MAX_MESSAGE_SIZE;
-		this.flushInterval = flushInterval != null ? flushInterval : DEFAULT_FLUSH_INTERVAL;
+		this.maxRetries = maxRetries > 0 ? maxRetries : DEFAULT_MAX_RETRIES;
+
+		this.batchSize = batchSize != null && batchSize > 0 ? batchSize : DEFAULT_BATCH_SIZE;
+		this.maxMessageSize = maxMessageSize != null && maxMessageSize > 0 ? maxMessageSize : DEFAULT_MAX_MESSAGE_SIZE;
+		this.flushInterval = flushInterval != null && flushInterval > 0 ? flushInterval : DEFAULT_FLUSH_INTERVAL;
 		this.logType = ((logType != null) && (logType.length() > 0)) ? logType : LOG_TYPE;
 		this.customFields = parsecustomFields(customFields);
 		this.mergeCustomFields = mergeCustomFields != null ? mergeCustomFields : MERGE_CUSTOM_FIELDS;
@@ -96,6 +101,7 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 			@PluginAttribute(value = "batchSize") Integer batchSize,
 			@PluginAttribute(value = "maxMessageSize") Long maxMessageSize, @PluginAttribute("logType") String logType,
 			@PluginAttribute(value = "flushInterval") Long flushInterval,
+			@PluginAttribute(value = "queueCapacity") Long queueCapacity,
 			@PluginAttribute("customFields") String customFields,
 			@PluginAttribute(value = "mergeCustomFields") Boolean mergeCustomFields,
 			@PluginAttribute(value = "maxRetries") Integer maxRetries,
@@ -119,7 +125,8 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 		long connectionTimeout = timeout != null ? timeout : 30000; // Default to 30 seconds if not specified
 
 		return new NewRelicBatchingAppender(name, filter, layout, true, apiKey, apiUrl, applicationName, batchSize,
-				maxMessageSize, flushInterval, logType, customFields, mergeCustomFields, retries, connectionTimeout);
+				maxMessageSize, flushInterval, queueCapacity, logType, customFields, mergeCustomFields, retries,
+				connectionTimeout);
 	}
 
 	@Override
@@ -209,7 +216,7 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 			public void run() {
 				while (true) {
 					try {
-						logger.debug("Flushing task running...");
+						logger.debug("Flushing task running... ");
 						List<LogEntry> batch = new ArrayList<>();
 						queue.drainTo(batch, batchSize);
 
@@ -226,7 +233,7 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 								logger.warn("Attempt {} failed. Retrying in next cycle...", attempt);
 							}
 
-							if (attempt >= maxRetries) {
+							if ((maxRetries > 0) && (attempt >= maxRetries)) {
 								logger.error("Exhausted all retry attempts across cycles. Discarding {} logs.",
 										queue.size());
 								queue.clear(); // Clear the queue after maxRetries
@@ -253,8 +260,8 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 
 		// Log the configuration settings in use
 		logger.info(
-				"NewRelicBatchingAppender initialized with settings: batchSize={}, maxMessageSize={}, flushInterval={}",
-				batchSize, maxMessageSize, flushInterval);
+				"NewRelicBatchingAppender initialized with settings: batchSize={}, maxMessageSize={}, flushInterval={}, queueCapacity={}, maxRetries= {} , mergeCustomFields ={}",
+				batchSize, maxMessageSize, flushInterval, queueCapacity, maxRetries, mergeCustomFields);
 	}
 
 	@Override
