@@ -6,6 +6,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -55,6 +57,7 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 	private static final boolean MERGE_CUSTOM_FIELDS = false; // by default there will be a separate field custom block
 																// for custom fields i.e. custom.attribute1
 	private static final long DEFAULT_MAX_QUEUE_SIZE_BYTES = 2097152; // 2 MB // 1.0.6
+	private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1); // 1.0.6
 
 	protected NewRelicBatchingAppender(String name, Filter filter, Layout<? extends Serializable> layout,
 			final boolean ignoreExceptions, String apiKey, String apiUrl, String applicationName, Integer batchSize,
@@ -209,54 +212,74 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 		return initialized;
 	}
 
+	/*
+	 * private void startFlushingTask() { Runnable flushTask = new Runnable() {
+	 * 
+	 * @Override public void run() { while (true) { try {
+	 * logger.debug("Flushing task running... "); List<LogEntry> batch = new
+	 * ArrayList<>(); queue.drainTo(batch, batchSize);
+	 * 
+	 * if (!batch.isEmpty()) {
+	 * logger.debug("Flushing {}/{} log entries to New Relic", batch.size(),
+	 * queue.size() + batch.size()); boolean success = logForwarder.flush(batch,
+	 * mergeCustomFields, customFields);
+	 * 
+	 * if (success) { logger.debug("Harvest Cycle: Successfully sent logs.");
+	 * attempt = 0; // Reset attempt counter on success } else { attempt++;
+	 * logger.warn("Attempt {} failed. Retrying in next cycle...", attempt); }
+	 * 
+	 * if ((maxRetries > 0) && (attempt >= maxRetries)) { logger.
+	 * error("Exhausted all retry attempts across cycles. Discarding {} logs.",
+	 * queue.size()); queue.clear(); // Clear the queue after maxRetries attempt =
+	 * 0; // Reset attempt counter after discarding
+	 * 
+	 * logger.debug("Queue Size: {} ", queue.size()); } }
+	 * 
+	 * // Wait for the next harvest cycle Thread.sleep(flushInterval); } catch
+	 * (InterruptedException e) { Thread.currentThread().interrupt();
+	 * logger.error("Flushing task interrupted", e); break; } } } };
+	 * 
+	 * Thread flushThread = new Thread(flushTask); flushThread.setDaemon(true);
+	 * flushThread.start();
+	 * 
+	 * // Log the configuration settings in use logger.info(
+	 * "NewRelicBatchingAppender initialized with settings: batchSize={}, maxMessageSize={}, flushInterval={}, queueCapacity={}, maxRetries= {} , mergeCustomFields ={}"
+	 * , batchSize, maxMessageSize, flushInterval, queueCapacity, maxRetries,
+	 * mergeCustomFields); }
+	 */
 	private void startFlushingTask() {
-		Runnable flushTask = new Runnable() {
+		Runnable flushTask = () -> {
+			try {
+				logger.debug("Flushing task running... ");
+				List<LogEntry> batch = new ArrayList<>();
+				queue.drainTo(batch, batchSize);
 
-			@Override
-			public void run() {
-				while (true) {
-					try {
-						logger.debug("Flushing task running... ");
-						List<LogEntry> batch = new ArrayList<>();
-						queue.drainTo(batch, batchSize);
+				if (!batch.isEmpty()) {
+					logger.debug("Flushing {}/{} log entries to New Relic", batch.size(), queue.size() + batch.size());
+					boolean success = logForwarder.flush(batch, mergeCustomFields, customFields);
 
-						if (!batch.isEmpty()) {
-							logger.debug("Flushing {}/{} log entries to New Relic", batch.size(),
-									queue.size() + batch.size());
-							boolean success = logForwarder.flush(batch, mergeCustomFields, customFields);
+					if (success) {
+						logger.debug("Harvest Cycle: Successfully sent logs.");
+						attempt = 0; // Reset attempt counter on success
+					} else {
+						attempt++;
+						logger.warn("Attempt {} failed. Retrying in next cycle...", attempt);
+					}
 
-							if (success) {
-								logger.debug("Harvest Cycle: Successfully sent logs.");
-								attempt = 0; // Reset attempt counter on success
-							} else {
-								attempt++;
-								logger.warn("Attempt {} failed. Retrying in next cycle...", attempt);
-							}
+					if ((maxRetries > 0) && (attempt >= maxRetries)) {
+						logger.error("Exhausted all retry attempts across cycles. Discarding {} logs.", queue.size());
+						queue.clear(); // Clear the queue after maxRetries
+						attempt = 0; // Reset attempt counter after discarding
 
-							if ((maxRetries > 0) && (attempt >= maxRetries)) {
-								logger.error("Exhausted all retry attempts across cycles. Discarding {} logs.",
-										queue.size());
-								queue.clear(); // Clear the queue after maxRetries
-								attempt = 0; // Reset attempt counter after discarding
-
-								logger.debug("Queue Size: {} ", queue.size());
-							}
-						}
-
-						// Wait for the next harvest cycle
-						Thread.sleep(flushInterval);
-					} catch (InterruptedException e) {
-						Thread.currentThread().interrupt();
-						logger.error("Flushing task interrupted", e);
-						break;
+						logger.debug("Queue Size: {} ", queue.size());
 					}
 				}
+			} catch (Exception e) {
+				logger.error("Error during flushing task", e);
 			}
 		};
 
-		Thread flushThread = new Thread(flushTask);
-		flushThread.setDaemon(true);
-		flushThread.start();
+		scheduler.scheduleAtFixedRate(flushTask, 0, flushInterval, TimeUnit.MILLISECONDS);
 
 		// Log the configuration settings in use
 		logger.info(
@@ -264,16 +287,50 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 				batchSize, maxMessageSize, flushInterval, queueCapacity, maxRetries, mergeCustomFields);
 	}
 
+	// Method to shut down the scheduler gracefully
+	public void shutdown() {
+		scheduler.shutdown();
+		try {
+			if (!scheduler.awaitTermination(60, TimeUnit.SECONDS)) {
+				scheduler.shutdownNow();
+			}
+		} catch (InterruptedException e) {
+			scheduler.shutdownNow();
+			Thread.currentThread().interrupt();
+		}
+	}
+
+	/*
+	 * @Override public boolean stop(final long timeout, final TimeUnit timeUnit) {
+	 * logger.debug("Stopping NewRelicBatchingAppender {}", getName());
+	 * setStopping(); final boolean stopped = super.stop(timeout, timeUnit, false);
+	 * try { logForwarder.close(mergeCustomFields, customFields); } catch (Exception
+	 * e) { logger.error("Unable to close appender", e); } setStopped();
+	 * logger.debug("NewRelicBatchingAppender {} has been stopped", getName());
+	 * return stopped; }
+	 */
 	@Override
 	public boolean stop(final long timeout, final TimeUnit timeUnit) {
 		logger.debug("Stopping NewRelicBatchingAppender {}", getName());
 		setStopping();
 		final boolean stopped = super.stop(timeout, timeUnit, false);
+
 		try {
+			// Close the log forwarder, flushing any remaining logs
 			logForwarder.close(mergeCustomFields, customFields);
+
+			// Shut down the ScheduledExecutorService
+			scheduler.shutdown();
+			if (!scheduler.awaitTermination(timeout, timeUnit)) {
+				scheduler.shutdownNow(); // Force shutdown if not terminated within the timeout
+				if (!scheduler.awaitTermination(timeout, timeUnit)) {
+					logger.error("Scheduler did not terminate");
+				}
+			}
 		} catch (Exception e) {
 			logger.error("Unable to close appender", e);
 		}
+
 		setStopped();
 		logger.debug("NewRelicBatchingAppender {} has been stopped", getName());
 		return stopped;
