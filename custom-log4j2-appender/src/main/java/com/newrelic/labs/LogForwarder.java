@@ -40,8 +40,8 @@ public class LogForwarder {
 		this.maxRetries = maxRetries;
 		this.timeout = timeout;
 		// Configure connection pooling 1.0.6
-		ConnectionPool connectionPool = new ConnectionPool(10, 5, TimeUnit.MINUTES); // 10 connections, 5-minute
-																						// keep-alive
+		ConnectionPool connectionPool = new ConnectionPool(5, 5, TimeUnit.MINUTES); // 5 connections, 5-minute
+																					// keep-alive
 
 		// Initialize OkHttpClient with connection pooling 1.0.6
 		this.client = new OkHttpClient.Builder().connectTimeout(timeout, TimeUnit.MILLISECONDS)
