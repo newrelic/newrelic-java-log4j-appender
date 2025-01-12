@@ -12,6 +12,8 @@ import java.util.zip.GZIPOutputStream;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import okhttp3.Call;
+import okhttp3.Callback;
 import okhttp3.ConnectionPool;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -40,8 +42,8 @@ public class LogForwarder {
 		this.maxRetries = maxRetries;
 		this.timeout = timeout;
 		// Configure connection pooling 1.0.6
-		ConnectionPool connectionPool = new ConnectionPool(5, 5, TimeUnit.MINUTES); // 5 connections, 5-minute
-																					// keep-alive
+		ConnectionPool connectionPool = new ConnectionPool(10, 5, TimeUnit.MINUTES); // 10 connections, 5-minute
+																						// keep-alive
 
 		// Initialize OkHttpClient with connection pooling 1.0.6
 		this.client = new OkHttpClient.Builder().connectTimeout(timeout, TimeUnit.MILLISECONDS)
@@ -83,6 +85,22 @@ public class LogForwarder {
 		return bStatus;
 	}
 
+	public void flushAsync(List<LogEntry> logEntries, boolean mergeCustomFields, Map<String, Object> customFields,
+			FlushCallback callback) {
+		List<Map<String, Object>> logEvents = convertToLogEvents(logEntries, mergeCustomFields, customFields);
+
+		if (logEvents.size() > maxMessageSize) {
+			try {
+				splitAndSendLogsAsync(logEntries, mergeCustomFields, customFields, callback);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		} else {
+			sendLogsAsync(logEvents, callback);
+		}
+	}
+
 	private boolean splitAndSendLogs(List<LogEntry> logEntries, boolean mergeCustomFields,
 			Map<String, Object> customFields) throws IOException {
 		List<LogEntry> subBatch = new ArrayList<>();
@@ -109,6 +127,31 @@ public class LogForwarder {
 		}
 
 		return bStatus;
+	}
+
+	private void splitAndSendLogsAsync(List<LogEntry> logEntries, boolean mergeCustomFields,
+			Map<String, Object> customFields, FlushCallback callback) throws IOException {
+		List<LogEntry> subBatch = new ArrayList<>();
+		int currentSize = 0;
+
+		for (LogEntry entry : logEntries) {
+			subBatch.add(entry);
+			String entryJson = objectMapper
+					.writeValueAsString(convertToLogEvent(entry, mergeCustomFields, customFields));
+			int entrySize = gzipCompress(entryJson).length;
+
+			if (currentSize + entrySize > maxMessageSize) {
+				sendLogsAsync(convertToLogEvents(subBatch, mergeCustomFields, customFields), callback);
+				subBatch.clear();
+				currentSize = 0;
+			}
+
+			currentSize += entrySize;
+		}
+
+		if (!subBatch.isEmpty()) {
+			sendLogsAsync(convertToLogEvents(subBatch, mergeCustomFields, customFields), callback);
+		}
 	}
 
 	private List<Map<String, Object>> convertToLogEvents(List<LogEntry> logEntries, boolean mergeCustomFields,
@@ -239,6 +282,54 @@ public class LogForwarder {
 			}
 		} else {
 			System.out.println("No remaining log events to flush.");
+		}
+	}
+
+	private void sendLogsAsync(List<Map<String, Object>> logEvents, FlushCallback callback) {
+		try {
+			String jsonPayload = objectMapper.writeValueAsString(logEvents);
+			byte[] compressedPayload = gzipCompress(jsonPayload);
+
+			MediaType mediaType = MediaType.parse("application/json");
+			RequestBody requestBody = RequestBody.create(compressedPayload, mediaType);
+			Request request = new Request.Builder().url(apiURL).post(requestBody).addHeader("X-License-Key", apiKey)
+					.addHeader("Content-Type", "application/json").addHeader("Content-Encoding", "gzip").build();
+
+			client.newCall(request).enqueue(new Callback() {
+				@Override
+				public void onFailure(Call call, IOException e) {
+					System.err.println("Failed to send logs asynchronously: " + e.getMessage());
+					callback.onFailure(logEvents); // Requeue logs if the request fails
+				}
+
+				@Override
+				public void onResponse(Call call, Response response) throws IOException {
+					try {
+						if (!response.isSuccessful()) {
+							System.err.println("Failed to send logs asynchronously: " + response.code() + " - "
+									+ response.message());
+							callback.onFailure(logEvents); // Requeue logs if the response is not successful
+						} else {
+							callback.onSuccess();
+						}
+					} finally {
+						response.close();
+					}
+				}
+			});
+		} catch (IOException e) {
+			System.err.println("Error during log forwarding: " + e.getMessage());
+			callback.onFailure(logEvents); // Requeue logs if an exception occurs
+		}
+	}
+
+	// Method to convert a map to a LogEntry
+	public LogEntry convertToLogEntry(Map<String, Object> logEvent) {
+		try {
+			return objectMapper.convertValue(logEvent, LogEntry.class);
+		} catch (IllegalArgumentException e) {
+			System.err.println("Failed to convert log event to LogEntry: " + e.getMessage());
+			return null; // Handle conversion failure as needed
 		}
 	}
 }

@@ -132,8 +132,7 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 				connectionTimeout);
 	}
 
-	@Override
-	public void append(LogEvent event) {
+	public void appendOld(LogEvent event) {
 		if (!checkEntryConditions()) {
 			logger.warn("Appender not initialized. Dropping log entry");
 			return;
@@ -180,6 +179,41 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 		}
 	}
 
+	@Override
+	public void append(LogEvent event) {
+		if (!checkEntryConditions()) {
+			logger.warn("Appender not initialized. Dropping log entry");
+			return;
+		}
+
+		String message = new String(getLayout().toByteArray(event));
+		String loggerName = event.getLoggerName();
+		long timestamp = event.getTimeMillis(); // Capture the log creation timestamp
+
+		// Extract MuleAppName from the message
+		String muleAppName = extractMuleAppName(message);
+
+		logger.debug("Queueing message for New Relic: " + message);
+
+		try {
+			// Extract custom fields from the event context
+			Map<String, Object> custom = new HashMap<>(extractcustom(event));
+			// Add static custom fields from configuration without a prefix
+			for (Entry<String, Object> entry : this.customFields.entrySet()) {
+				custom.putIfAbsent(entry.getKey(), entry.getValue());
+			}
+			// Directly add to the queue
+			queue.add(
+					new LogEntry(message, applicationName, muleAppName, logType, timestamp, custom, mergeCustomFields));
+			// Check if the batch size is reached and flush asynchronously
+			if (queue.size() >= batchSize) {
+				flushQueueAsync();
+			}
+		} catch (Exception e) {
+			logger.error("Unable to insert log entry into log queue. ", e);
+		}
+	}
+
 	private boolean flushQueue() {
 		List<LogEntry> batch = new ArrayList<>();
 		boolean bStatus = false;
@@ -189,6 +223,32 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 			bStatus = logForwarder.flush(batch, mergeCustomFields, customFields);
 		}
 		return bStatus;
+	}
+
+	private void flushQueueAsync() {
+		List<LogEntry> batch = new ArrayList<>();
+		queue.drainTo(batch, batchSize);
+
+		if (!batch.isEmpty()) {
+			logForwarder.flushAsync(batch, mergeCustomFields, customFields, new FlushCallback() {
+				@Override
+				public void onSuccess() {
+					logger.debug("Flush successful.");
+					attempt = 0; // Reset attempt counter on success
+				}
+
+				@Override
+				public void onFailure(List<Map<String, Object>> failedLogEvents) {
+					logger.warn("Flush failed. Requeuing logs...");
+					requeueLogs(failedLogEvents);
+					attempt++;
+					if (attempt >= maxRetries) {
+						logger.error("Exhausted all retry attempts. Discarding logs.");
+						attempt = 0; // Reset attempt counter after discarding
+					}
+				}
+			});
+		}
 	}
 
 	private Map<String, Object> extractcustom(LogEvent event) {
@@ -210,6 +270,22 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 		boolean initialized = logForwarder != null && logForwarder.isInitialized();
 		logger.debug("Check entry conditions: " + initialized);
 		return initialized;
+	}
+
+	private void requeueLogs(List<Map<String, Object>> logEvents) {
+		for (Map<String, Object> logEvent : logEvents) {
+			try {
+				// Use LogForwarder to convert logEvent to LogEntry
+				LogEntry logEntry = logForwarder.convertToLogEntry(logEvent);
+				// Attempt to add the log entry back to the queue
+				boolean added = queue.add(logEntry);
+				if (!added) {
+					System.err.println("Failed to requeue log entry due to size constraints.");
+				}
+			} catch (IllegalArgumentException e) {
+				System.err.println("Failed to convert log event to LogEntry: " + logEvent);
+			}
+		}
 	}
 
 	/*
@@ -256,23 +332,25 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 
 				if (!batch.isEmpty()) {
 					logger.debug("Flushing {}/{} log entries to New Relic", batch.size(), queue.size() + batch.size());
-					boolean success = logForwarder.flush(batch, mergeCustomFields, customFields);
 
-					if (success) {
-						logger.debug("Harvest Cycle: Successfully sent logs.");
-						attempt = 0; // Reset attempt counter on success
-					} else {
-						attempt++;
-						logger.warn("Attempt {} failed. Retrying in next cycle...", attempt);
-					}
+					logForwarder.flushAsync(batch, mergeCustomFields, customFields, new FlushCallback() {
+						@Override
+						public void onSuccess() {
+							logger.debug("Harvest Cycle: Successfully sent logs.");
+							attempt = 0; // Reset attempt counter on success
+						}
 
-					if ((maxRetries > 0) && (attempt >= maxRetries)) {
-						logger.error("Exhausted all retry attempts across cycles. Discarding {} logs.", queue.size());
-						queue.clear(); // Clear the queue after maxRetries
-						attempt = 0; // Reset attempt counter after discarding
-
-						logger.debug("Queue Size: {} ", queue.size());
-					}
+						@Override
+						public void onFailure(List<Map<String, Object>> failedLogEvents) {
+							logger.warn("Flush failed. Requeuing logs...");
+							requeueLogs(failedLogEvents);
+							attempt++;
+							if (attempt >= maxRetries) {
+								logger.error("Exhausted all retry attempts. Discarding logs.");
+								attempt = 0; // Reset attempt counter after discarding
+							}
+						}
+					});
 				}
 			} catch (Exception e) {
 				logger.error("Error during flushing task", e);
@@ -283,12 +361,13 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 
 		// Log the configuration settings in use
 		logger.info(
-				"NewRelicBatchingAppender initialized with settings: batchSize={}, maxMessageSize={}, flushInterval={}, queueCapacity={}, maxRetries= {} , mergeCustomFields ={}",
+				"NewRelicBatchingAppender initialized with settings: batchSize={}, maxMessageSize={}, flushInterval={}, queueCapacity={}, maxRetries={}, mergeCustomFields={}",
 				batchSize, maxMessageSize, flushInterval, queueCapacity, maxRetries, mergeCustomFields);
 	}
 
 	// Method to shut down the scheduler gracefully
 	public void shutdown() {
+		flushQueueAsync(); // Flush remaining logs
 		scheduler.shutdown();
 		try {
 			if (!scheduler.awaitTermination(60, TimeUnit.SECONDS)) {
