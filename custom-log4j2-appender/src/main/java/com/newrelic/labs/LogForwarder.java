@@ -69,7 +69,8 @@ public class LogForwarder {
 			// System.out.println("jsonPayload size " + jsonPayload.length());
 
 			if (compressedPayload.length > maxMessageSize) {
-				System.out.println("splitAndSendLogs: Called size exceeded " + compressedPayload.length);
+				// System.out.println("splitAndSendLogs: Called size exceeded " +
+				// compressedPayload.length);
 				bStatus = splitAndSendLogs(logEntries, mergeCustomFields, customFields);
 			} else {
 				bStatus = sendLogs(logEvents);
