@@ -28,7 +28,7 @@ Add the library to your project using Maven Central:
 <dependency>
     <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>1.0.4</version>
+    <version>1.0.6</version>
 </dependency>
 ```
 
@@ -38,7 +38,7 @@ Or, if using a locally built JAR file:
 <dependency>
     <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>1.0.4</version>
+    <version>1.0.6</version>
     <scope>system</scope>
     <systemPath>${project.basedir}/src/main/resources/custom-log4j2-appender.jar</systemPath>
 </dependency>
@@ -58,45 +58,82 @@ Replace `[your-api-key]` with the ingest key obtained from the New Relic platfor
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
-<Configuration status="DEBUG" name="cloudhub" packages="com.newrelic.labs">
+<Configuration status="INFO" name="cloudhub" packages="com.newrelic.labs">
     <Appenders>
         <NewRelicBatchingAppender name="NewRelicAppender"
                                   apiKey="YOUR_API_KEY"
                                   apiUrl="https://log-api.newrelic.com/log/v1"
                                   logType="muleLog"
                                   applicationName="your-application-name"
-                                  batchSize="5000"
+                                  batchSize="2000"
                                   maxMessageSize="1048576"
                                   flushInterval="120000"
                                   customFields="businessGroup=exampleGroup,environment=production"
-                                  mergeCustomFields="true">
+                                  mergeCustomFields="true"
+                                  maxRetries="3"
+                                  connPoolSize="10"
+                                  queueCapacity="2097152"
+                                  timeout="15000">
             <PatternLayout pattern="[%d{MM-dd HH:mm:ss}] %-5p %c{1} [%t]: %m%n"/>
         </NewRelicBatchingAppender>
     </Appenders>
     <Loggers>
         <AsyncRoot level="INFO">
+            <!-- Comment out the NewRelicAppender reference to disable it -->
             <AppenderRef ref="NewRelicAppender"/>
         </AsyncRoot>
     </Loggers>
 </Configuration>
 ```
 
+
 ### Parameters
 
-| Parameter           | Required? | Default Value | Description                                                                 |
-|---------------------|-----------|---------------|-----------------------------------------------------------------------------|
-| name                | Yes       |               | Name used to register Log4j Appender                                        |
-| apiKey              | Yes       |               | API key for authenticating with New Relic's logging service                 |
-| apiUrl              | Yes       |               | URL for New Relic's log ingestion API                                       |
-| logType             | No        | "muleLog"     | Type of log being sent                                                      |
-| applicationName     | Yes       |               | Name of the application generating the logs                                 |
-| batchSize           | No        | 5000          | Maximum number of log entries to batch together before sending to New Relic |
-| maxMessageSize      | No        | 1048576       | Maximum size (in bytes) of the payload to be sent in a single HTTP request  |
-| flushInterval       | No        | 120000        | Interval (in milliseconds) at which the log entries are flushed to New Relic|
-| customFields        | No        |               | Add extra context to your logs with custom fields, represented as comma-separated name-value pairs.|
-| mergeCustomFields   | No        | false         | (Default: false) All custom fields will be available as `custom.field1`, `custom.field2` else `field1` , `field2` will be available as the main attributes |
+| Parameter           | Required? | Default Value          | Description                                                                 |
+|---------------------|-----------|------------------------|-----------------------------------------------------------------------------|
+| name                | Yes       |                        | Name used to register Log4j Appender                                        |
+| apiKey              | Yes       |                        | API key for authenticating with New Relic's logging service                 |
+| apiUrl              | Yes       |                        | URL for New Relic's log ingestion API                                       |
+| logType             | No        | "muleLog"              | Type of log being sent                                                      |
+| applicationName     | Yes       |                        | Name of the application generating the logs                                 |
+| batchSize           | No        | 2000                   | Maximum number of log entries to batch together before sending to New Relic |
+| maxMessageSize      | No        | 1048576                | Maximum size (in bytes) of the payload to be sent in a single HTTP request  |
+| flushInterval       | No        | 120000                 | Interval (in milliseconds) at which the log entries are flushed to New Relic|
+| customFields        | No        |                        | Add extra context to your logs with custom fields, represented as comma-separated name-value pairs.|
+| mergeCustomFields   | No        | "false"                | Whether to merge custom fields into the main log attributes                 |
+| maxRetries          | No        | 3                      | Maximum number of retry attempts for sending logs                           |
+| connPoolSize        | No        | 5                      | Size of the connection pool for HTTP requests                               |
+| queueCapacity       | No        | 2097152                | Maximum capacity (in bytes) of the log queue                                |
+| timeout             | No        | 30000                  | Connection timeout (in milliseconds) for HTTP requests                      |
 
+---
 
+## Log4j2 Layouts
+
+### PatternLayout
+
+- **Purpose**: Formats logs in a customizable text format.
+- **Example**:
+  ```xml
+  <PatternLayout pattern="[%d{MM-dd HH:mm:ss}] %-5p %c{1} [%t]: %m%n"/>
+  ```
+- **Use Case**: Ideal for human-readable logs.
+
+### JsonLayout
+
+- **Purpose**: Formats logs as JSON objects for structured logging.
+- **Example**:
+  ```xml
+  <JsonLayout compact="true" eventEol="true"/>
+  ```
+- **Use Case**: Suitable for integration with log management systems.
+
+### Choosing Layout
+
+- **PatternLayout**: For text-based logs.
+- **JsonLayout**: For structured, machine-readable logs.
+
+--- 
 
 ## Custom Fields [ v1.0.1 + ]
 Custom fields provide a way to include additional custom data in your logs. They are represented as comma-separated name-value pairs. This feature allows you to add more context to your logs, making them more meaningful and easier to analyze.
@@ -104,7 +141,8 @@ Custom fields provide a way to include additional custom data in your logs. They
 ## Configuring Custom Fields as Subfields of Custom Fields [v1.0.3+]
 Starting from version 1.0.3, a new configuration parameter `mergeCustomFields` has been added. By default, all custom fields will be available as subfields under the `custom` field (e.g., `custom.field1`, `custom.field2`). If `mergeCustomFields` is set to `true`, custom fields will be available as main attributes (e.g., `field1`, `field2`).
 
-
+## Configuring queueCapacity and connPoolSize [v1.0.6+]
+Starting from version 1.0.6, the queueCapacity and connPoolSize parameters are exposed to allow for fine-tuning of the appender's performance, especially under high load conditions. These parameters help manage the flow of log data and the efficiency of network connections.
 
 ### TLS 1.2 Requirement
 
