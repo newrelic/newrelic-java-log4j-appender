@@ -39,6 +39,7 @@ Or, if using a locally built JAR file:
     <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
     <version>1.0.6</version>
+
     <scope>system</scope>
     <systemPath>${project.basedir}/src/main/resources/custom-log4j2-appender.jar</systemPath>
 </dependency>
@@ -50,7 +51,7 @@ Or, if using a locally built JAR file:
 
 Follow the instructions for setting up the New Relic Log4j2 Appender.
 
-### Log4J XML Configuration
+### Log4J2 XML Configuration
 
 Replace `[your-api-key]` with the ingest key obtained from the New Relic platform.
 
@@ -88,6 +89,7 @@ Replace `[your-api-key]` with the ingest key obtained from the New Relic platfor
 
 
 ### Parameters
+
 
 | Parameter           | Required? | Default Value          | Description                                                                 |
 |---------------------|-----------|------------------------|-----------------------------------------------------------------------------|
