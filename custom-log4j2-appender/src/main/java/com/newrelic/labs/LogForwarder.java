@@ -30,20 +30,23 @@ public class LogForwarder {
 	private final long maxMessageSize;
 	// 1.0.5
 	private final int maxRetries;
+	private final int connPoolSize;
 	private final long timeout; // New parameter for connection timeout
 	// 1.0.5
 
 	public LogForwarder(String apiKey, String apiURL, long maxMessageSize, NRBufferWithFifoEviction<LogEntry> queue,
-			int maxRetries, long timeout) {
+			int maxRetries, long timeout, int connPoolSize) {
 		this.apiKey = apiKey;
 		this.apiURL = apiURL;
 		this.maxMessageSize = maxMessageSize;
 		this.logQueue = queue;
 		this.maxRetries = maxRetries;
 		this.timeout = timeout;
+		this.connPoolSize = connPoolSize;
 		// Configure connection pooling 1.0.6
-		ConnectionPool connectionPool = new ConnectionPool(10, 5, TimeUnit.MINUTES); // 10 connections, 5-minute
-																						// keep-alive
+		ConnectionPool connectionPool = new ConnectionPool(connPoolSize, 5, TimeUnit.MINUTES); // 10 connections,
+																								// 5-minute
+		// keep-alive
 
 		// Initialize OkHttpClient with connection pooling 1.0.6
 		this.client = new OkHttpClient.Builder().connectTimeout(timeout, TimeUnit.MILLISECONDS)
