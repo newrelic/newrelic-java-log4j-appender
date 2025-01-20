@@ -12,6 +12,11 @@ dependencies {
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.13.1'
     implementation 'org.apache.logging.log4j:log4j-core:2.14.1'
     implementation 'org.apache.logging.log4j:log4j-api:2.14.1'
+    implementation 'com.newrelic.telemetry:telemetry-http-okhttp:0.16.0'
+    implementation 'org.slf4j:slf4j-api:1.7.32' // Ensure SLF4J API is included
+    implementation 'org.apache.logging.log4j:log4j-slf4j-impl:2.14.1' // Log4j2 binding
+    implementation 'org.apache.logging.log4j:log4j-core:2.14.1'
+    implementation 'org.apache.logging.log4j:log4j-api:2.14.1'
 }
 
 jar {
@@ -20,7 +25,7 @@ jar {
             'Implementation-Title': 'Custom Log4j2 Appender',
             'Implementation-Vendor': 'New Relic Labs',
             'Implementation-Vendor-Id': 'com.newrelic.labs',
-            'Implementation-Version': '1.0.6'
+            'Implementation-Version': '1.0.7'
         )
     }
 }
@@ -53,7 +58,7 @@ publishing {
 
             groupId = 'com.newrelic.labs'
             artifactId = 'custom-log4j2-appender'
-            version = '1.0.6'
+            version = '1.0.7'
 
             pom {
                 name = 'Custom Log4j2 Appender'

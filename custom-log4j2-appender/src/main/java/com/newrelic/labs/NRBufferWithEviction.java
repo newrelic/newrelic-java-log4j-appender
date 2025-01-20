@@ -8,51 +8,56 @@ import java.util.Collection;
  */
 public abstract class NRBufferWithEviction<Q> {
 
-    private long capacity;
+  private long capacity;
 
-    public NRBufferWithEviction(long capacity) {
-        this.capacity = capacity;
-    }
+  public NRBufferWithEviction(long capacity) {
+    this.capacity = capacity;
+  }
 
-    public long getCapacity() {
-        return capacity;
-    }
+  /**
+   * Adds an element to the buffer.
+   *
+   * @param element The element to add.
+   * @return True if the element was added successfully, false otherwise.
+   */
+  public abstract boolean add(Q element);
 
-    public void setCapacity(long capacity) {
-        this.capacity = capacity;
-    }
+  /**
+   * Drains elements from the buffer into the given collection.
+   *
+   * @param collection The collection to drain elements into.
+   * @param atMost The maximum number of elements to drain.
+   * @return The number of elements drained.
+   */
+  public abstract int drainTo(Collection<Q> collection, int atMost);
 
-    /**
-     * Evicts an element from the buffer to make room for new elements.
-     * @return The evicted element.
-     */
-    protected abstract Q evict();
+  /**
+   * Evicts an element from the buffer to make room for new elements.
+   *
+   * @return The evicted element.
+   */
+  protected abstract Q evict();
 
-    /**
-     * Evicts elements from the buffer to make room for an element with the specified cost.
-     * @param cost The cost of the element to be accommodated.
-     * @return True if eviction was successful, false otherwise.
-     */
-    protected abstract boolean evict(long cost);
+  /**
+   * Evicts elements from the buffer to make room for an element with the specified cost.
+   *
+   * @param cost The cost of the element to be accommodated.
+   * @return True if eviction was successful, false otherwise.
+   */
+  protected abstract boolean evict(long cost);
 
-    /**
-     * Returns the number of elements in the buffer.
-     * @return The size of the buffer.
-     */
-    public abstract int size();
+  public long getCapacity() {
+    return capacity;
+  }
 
-    /**
-     * Drains elements from the buffer into the given collection.
-     * @param collection The collection to drain elements into.
-     * @param atMost The maximum number of elements to drain.
-     * @return The number of elements drained.
-     */
-    public abstract int drainTo(Collection<Q> collection, int atMost);
+  public void setCapacity(long capacity) {
+    this.capacity = capacity;
+  }
 
-    /**
-     * Adds an element to the buffer.
-     * @param element The element to add.
-     * @return True if the element was added successfully, false otherwise.
-     */
-    public abstract boolean add(Q element);
+  /**
+   * Returns the number of elements in the buffer.
+   *
+   * @return The size of the buffer.
+   */
+  public abstract int size();
 }

@@ -7,7 +7,7 @@ cp build-jar.gradle build.gradle
 # Set variables
 GROUP_ID="com.newrelic.labs"
 ARTIFACT_ID="custom-log4j2-appender"
-VERSION="1.0.6"
+VERSION="1.0.7"
 KEY_ID="0ED9FD74E81E6D83FAE25F235640EA0B1C631C6F" # Replace with your actual key ID
 
 # Get the current directory (assuming the script is run from the custom-log4j2-appender directory)
@@ -100,28 +100,22 @@ DEPENDENCIES=$(cat <<EOF
   <scope>compile</scope>
 </dependency>
 <dependency>
-  <groupId>com.squareup.okhttp3</groupId>
-  <artifactId>okhttp</artifactId>
-  <version>4.9.3</version>
-  <scope>runtime</scope>
+  <groupId>com.newrelic.telemetry</groupId>
+  <artifactId>telemetry-http-okhttp</artifactId>
+  <version>0.16.0</version>
+  <scope>compile</scope>
 </dependency>
 <dependency>
-  <groupId>com.fasterxml.jackson.core</groupId>
-  <artifactId>jackson-databind</artifactId>
-  <version>2.13.1</version>
-  <scope>runtime</scope>
-</dependency>
-<dependency>
-  <groupId>org.apache.logging.log4j</groupId>
-  <artifactId>log4j-core</artifactId>
-  <version>2.14.1</version>
-  <scope>runtime</scope>
+  <groupId>org.slf4j</groupId>
+  <artifactId>slf4j-api</artifactId>
+  <version>1.7.32</version>
+  <scope>compile</scope>
 </dependency>
 <dependency>
   <groupId>org.apache.logging.log4j</groupId>
-  <artifactId>log4j-api</artifactId>
+  <artifactId>log4j-slf4j-impl</artifactId>
   <version>2.14.1</version>
-  <scope>runtime</scope>
+  <scope>compile</scope>
 </dependency>
 EOF
 )
