@@ -4,13 +4,21 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import java.util.zip.GZIPOutputStream;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.newrelic.telemetry.Attributes;
+import com.newrelic.telemetry.OkHttpPoster;
+import com.newrelic.telemetry.TelemetryClient;
+import com.newrelic.telemetry.logs.Log;
+import com.newrelic.telemetry.logs.LogBatch;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -33,6 +41,8 @@ public class LogForwarder {
 	private final int connPoolSize;
 	private final long timeout; // New parameter for connection timeout
 	// 1.0.5
+	// 1.0.7
+	private final TelemetryClient telemetryClient;
 
 	public LogForwarder(String apiKey, String apiURL, long maxMessageSize, NRBufferWithFifoEviction<LogEntry> queue,
 			int maxRetries, long timeout, int connPoolSize) {
@@ -45,7 +55,8 @@ public class LogForwarder {
 		this.connPoolSize = connPoolSize;
 		// Configure connection pooling 1.0.6
 		ConnectionPool connectionPool = new ConnectionPool(connPoolSize, 5, TimeUnit.MINUTES); // 10 connections,
-																								// 5-minute
+		this.telemetryClient = TelemetryClient.create(() -> new OkHttpPoster(Duration.of(10, ChronoUnit.SECONDS)),
+				apiKey); // 5-minute
 		// keep-alive
 
 		// Initialize OkHttpClient with connection pooling 1.0.6
@@ -286,9 +297,11 @@ public class LogForwarder {
 		} else {
 			System.out.println("No remaining log events to flush.");
 		}
+
+		shutdown();
 	}
 
-	private void sendLogsAsync(List<Map<String, Object>> logEvents, FlushCallback callback) {
+	private void sendLogsAsyncOkHttp(List<Map<String, Object>> logEvents, FlushCallback callback) {
 		try {
 			String jsonPayload = objectMapper.writeValueAsString(logEvents);
 			byte[] compressedPayload = gzipCompress(jsonPayload);
@@ -324,6 +337,33 @@ public class LogForwarder {
 			System.err.println("Error during log forwarding: " + e.getMessage());
 			callback.onFailure(logEvents); // Requeue logs if an exception occurs
 		}
+	}
+
+	private void sendLogsAsync(List<Map<String, Object>> logEvents, FlushCallback callback) {
+		try {
+			// Convert log events to Log objects
+			List<Log> logs = logEvents.stream().map(event -> Log.builder().message(event.get("message").toString())
+					.timestamp(Long.parseLong(event.get("timestamp").toString()))
+					.attributes(new Attributes().put("applicationName", event.get("applicationName").toString())
+							.put("logtype", event.get("logtype").toString()).put("name", event.get("name").toString()))
+					.build()).collect(Collectors.toList());
+
+			// Create a LogBatch with common attributes
+			Attributes commonAttributes = new Attributes().put("source", "NRBatchingAppender");
+			LogBatch logBatch = new LogBatch(logs, commonAttributes);
+
+			// Send the batch
+			telemetryClient.sendBatch(logBatch);
+
+			callback.onSuccess();
+		} catch (Exception e) {
+			System.err.println("Failed to send logs asynchronously: " + e.getMessage());
+			callback.onFailure(logEvents);
+		}
+	}
+
+	public void shutdown() {
+		telemetryClient.shutdown();
 	}
 
 	// Method to convert a map to a LogEntry
