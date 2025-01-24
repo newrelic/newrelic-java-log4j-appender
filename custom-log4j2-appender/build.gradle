@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'com.github.johnrengelman.shadow' version '6.1.0'
     id 'maven-publish'
 }
 
@@ -10,16 +11,22 @@ repositories {
 dependencies {
     implementation 'com.squareup.okhttp3:okhttp:4.9.3'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.13.1'
-    implementation 'org.apache.logging.log4j:log4j-core:2.14.1'
-    implementation 'org.apache.logging.log4j:log4j-api:2.14.1'
+    implementation 'org.apache.logging.log4j:log4j-core:2.24.3'
+    implementation 'org.apache.logging.log4j:log4j-api:2.24.3'
     implementation 'com.newrelic.telemetry:telemetry-http-okhttp:0.16.0'
     implementation 'org.slf4j:slf4j-api:1.7.32' // Ensure SLF4J API is included
-    implementation 'org.apache.logging.log4j:log4j-slf4j-impl:2.14.1' // Log4j2 binding
-    implementation 'org.apache.logging.log4j:log4j-core:2.14.1'
-    implementation 'org.apache.logging.log4j:log4j-api:2.14.1'
+    implementation 'org.apache.logging.log4j:log4j-slf4j-impl:2.24.3' // Log4j2 binding
+    implementation 'org.apache.logging.log4j:log4j-core:2.24.3'
+    implementation 'org.apache.logging.log4j:log4j-api:2.24.3'
 }
 
 jar {
+    enabled = false // Disable the standard JAR task
+}
+
+shadowJar {
+    archiveClassifier.set('') // Remove the 'all' classifier
+    mergeServiceFiles()
     manifest {
         attributes(
             'Implementation-Title': 'Custom Log4j2 Appender',
@@ -29,8 +36,6 @@ jar {
         )
     }
 }
-
-
 
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
@@ -46,13 +51,10 @@ task sourcesJar(type: Jar) {
     from sourceSets.main.allSource
 }
 
-
-
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            from components.java // Include standard JAR
-
+            artifact shadowJar // Only include Shadow JAR
             artifact javadocJar
             artifact sourcesJar
 

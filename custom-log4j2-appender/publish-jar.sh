@@ -89,13 +89,13 @@ DEPENDENCIES=$(cat <<EOF
 <dependency>
   <groupId>org.apache.logging.log4j</groupId>
   <artifactId>log4j-core</artifactId>
-  <version>2.14.1</version>
+  <version>2.24.3</version>
   <scope>compile</scope>
 </dependency>
 <dependency>
   <groupId>org.apache.logging.log4j</groupId>
   <artifactId>log4j-api</artifactId>
-  <version>2.14.1</version>
+  <version>2.24.3</version>
   <scope>compile</scope>
 </dependency>
 <dependency>
@@ -113,13 +113,13 @@ DEPENDENCIES=$(cat <<EOF
 <dependency>
   <groupId>org.apache.logging.log4j</groupId>
   <artifactId>log4j-core</artifactId>
-  <version>2.14.1</version>
+  <version>2.24.3</version>
   <scope>runtime</scope>
 </dependency>
 <dependency>
   <groupId>org.apache.logging.log4j</groupId>
   <artifactId>log4j-api</artifactId>
-  <version>2.14.1</version>
+  <version>2.24.3</version>
   <scope>runtime</scope>
 </dependency>
 EOF
