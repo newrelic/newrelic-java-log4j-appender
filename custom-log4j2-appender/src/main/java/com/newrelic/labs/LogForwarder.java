@@ -30,7 +30,7 @@ public class LogForwarder {
   // private final int connPoolSize;
   private final long timeout; // New parameter for connection timeout
   // 1.0.5
-  // 1.0.7
+  // 1.0.8
   private final TelemetryClient telemetryClient;
 
   public LogForwarder(String apiKey, String apiURL, long maxMessageSize,
@@ -257,7 +257,7 @@ public class LogForwarder {
         }
       }
       commonAttributes.put("source", "NRBatchingAppender");
-      commonAttributes.put("version", "1.0.7");
+      commonAttributes.put("version", "1.0.8");
       LogBatch logBatch = new LogBatch(logs, commonAttributes);
 
       // Send the batch
