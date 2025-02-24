@@ -35,7 +35,7 @@ public class LogForwarder {
     // private final int connPoolSize;
     private final long timeout; // New parameter for connection timeout
     // 1.0.5
-    // 1.0.9
+    // 1.0.10
     private final TelemetryClient telemetryClient;
 
     public LogForwarder(String apiKey, String apiURL, long maxMessageSize, NRBufferWithFifoEviction<LogEntry> queue,
@@ -228,11 +228,7 @@ public class LogForwarder {
                     .map(entry -> Log.builder()
                             .message(entry.getMessage())
                             .timestamp(entry.getTimestamp())
-                            .attributes(new Attributes().put("applicationName", entry.getApplicationName())
-                                    .put("logtype", entry.getLogType())
-                                    .put("name", entry.getName())
-                                    .put("hostname", getHostname())
-                                    .put("source", "NRBatchingAppender"))
+                            .attributes(entry.getPropertiesAttributes())
                             .build())
                     .collect(Collectors.toList());
 
@@ -253,7 +249,7 @@ public class LogForwarder {
                 }
             }
             commonAttributes.put("source", "NRBatchingAppender");
-            commonAttributes.put("version", "1.0.9");
+            commonAttributes.put("version", "1.0.10");
             LogBatch logBatch = new LogBatch(logs, commonAttributes);
 
             // Send the batch
