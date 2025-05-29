@@ -28,7 +28,7 @@ Add the library to your project using Maven Central:
 <dependency>
     <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>1.0.6</version>
+    <version>1.1.3</version>
 </dependency>
 ```
 
@@ -38,7 +38,7 @@ Or, if using a locally built JAR file:
 <dependency>
     <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>1.0.6</version>
+    <version>1.1.3</version>
 
     <scope>system</scope>
     <systemPath>${project.basedir}/src/main/resources/custom-log4j2-appender.jar</systemPath>
@@ -74,6 +74,7 @@ Replace `[your-api-key]` with the ingest key obtained from the New Relic platfor
                                   maxRetries="3"
                                   connPoolSize="10"
                                   queueCapacity="2097152"
+                                  obfuscationPatterns="\d{4}-\d{4}-\d{4}-\d{4}^^\d{2}/\d{2}"
                                   timeout="15000">
             <PatternLayout pattern="[%d{MM-dd HH:mm:ss}] %-5p %c{1} [%t]: %m%n"/>
         </NewRelicBatchingAppender>
@@ -107,6 +108,7 @@ Replace `[your-api-key]` with the ingest key obtained from the New Relic platfor
 | connPoolSize        | No        | 5                      | Size of the connection pool for HTTP requests                               |
 | queueCapacity       | No        | 2097152                | Maximum capacity (in bytes) of the log queue                                |
 | timeout             | No        | 30000                  | Connection timeout (in milliseconds) for HTTP requests                      |
+| obfuscationPatterns | No        |                        | Double caret (^^) separated RegEx patterns to obfuscate the matched pattern in the message. Refer to the example above for obfuscating credit card numbers and expiry dates                  |
 
 ---
 
