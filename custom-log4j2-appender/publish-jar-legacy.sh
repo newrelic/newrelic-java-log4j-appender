@@ -7,7 +7,7 @@ cp build-jar.gradle build.gradle
 # Set variables
 GROUP_ID="com.newrelic.labs"
 ARTIFACT_ID="custom-log4j2-appender"
-VERSION="1.1.2"
+VERSION="1.1.3"
 KEY_ID="0ED9FD74E81E6D83FAE25F235640EA0B1C631C6F" # Replace with your actual key ID
 
 # Get the current directory (assuming the script is run from the custom-log4j2-appender directory)
