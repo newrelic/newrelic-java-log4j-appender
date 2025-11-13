@@ -1,0 +1,29 @@
+<!-- 
+Maven settings.xml template for Sonatype Central Portal publishing
+Place this in ~/.m2/settings.xml and update with your credentials
+
+Get your token from: https://central.sonatype.com/account
+-->
+<settings>
+  <servers>
+    <server>
+      <id>central</id>
+      <username>your-central-portal-token</username>
+      <password>your-central-portal-token</password>
+    </server>
+  </servers>
+  
+  <profiles>
+    <profile>
+      <id>release</id>
+      <activation>
+        <activeByDefault>false</activeByDefault>
+      </activation>
+      <properties>
+        <gpg.executable>gpg</gpg.executable>
+        <gpg.keyname>your-gpg-key-id</gpg.keyname>
+        <gpg.passphrase>your-gpg-passphrase</gpg.passphrase>
+      </properties>
+    </profile>
+  </profiles>
+</settings>
