@@ -28,7 +28,7 @@ Add the library to your project using Maven Central:
 <dependency>
     <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>1.1.3</version>
+    <version>1.1.10</version>
 </dependency>
 ```
 
@@ -38,8 +38,7 @@ Or, if using a locally built JAR file:
 <dependency>
     <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>1.1.3</version>
-
+    <version>1.1.10</version>
     <scope>system</scope>
     <systemPath>${project.basedir}/src/main/resources/custom-log4j2-appender.jar</systemPath>
 </dependency>
@@ -75,7 +74,8 @@ Replace `[your-api-key]` with the ingest key obtained from the New Relic platfor
                                   connPoolSize="10"
                                   queueCapacity="2097152"
                                   obfuscationPatterns="\d{4}-\d{4}-\d{4}-\d{4}^^\d{2}/\d{2}"
-                                  timeout="15000">
+                                  timeout="15000"
+                                  unwrapJson="false">
             <PatternLayout pattern="[%d{MM-dd HH:mm:ss}] %-5p %c{1} [%t]: %m%n"/>
         </NewRelicBatchingAppender>
     </Appenders>
@@ -109,6 +109,86 @@ Replace `[your-api-key]` with the ingest key obtained from the New Relic platfor
 | queueCapacity       | No        | 2097152                | Maximum capacity (in bytes) of the log queue                                |
 | timeout             | No        | 30000                  | Connection timeout (in milliseconds) for HTTP requests                      |
 | obfuscationPatterns | No        |                        | Double caret (^^) separated RegEx patterns to obfuscate the matched pattern in the message. Refer to the example above for obfuscating credit card numbers and expiry dates                  |
+| unwrapJson          | No        | false                  | Controls JSON message processing behavior. When `false` (default), maintains original `message.x.y` structure. When `true`, unwraps JSON to flat attributes like `x.y` |
+
+---
+
+## JSON Message Processing [v1.1.10+]
+
+The appender supports configurable JSON message processing to optimize how JSON log data appears in New Relic.
+
+### unwrapJson Parameter
+
+The `unwrapJson` parameter controls how JSON messages are processed:
+
+- **`unwrapJson="false"` (default)**: Maintains original behavior where JSON content appears as nested attributes under `message.*`
+- **`unwrapJson="true"`: Unwraps JSON content to create flat, top-level attributes**
+
+### Example Behavior
+
+Given a JSON log message:
+```json
+{"status": "success", "user": {"id": 123, "name": "John"}}
+```
+
+**With `unwrapJson="false"` (default)**:
+- New Relic attributes: `message.status`, `message.user.id`, `message.user.name`
+- **Use for**: Existing deployments, backward compatibility
+
+**With `unwrapJson="true"`**:
+- New Relic attributes: `status`, `user.id`, `user.name`  
+- **Use for**: Cleaner attribute structure, easier querying
+
+### Layout Compatibility
+
+JSON processing works with both Log4j2 layouts:
+
+#### JsonLayout
+```xml
+<NewRelicBatchingAppender name="NewRelicAppender" 
+                          apiKey="YOUR_API_KEY"
+                          unwrapJson="true">
+    <JsonLayout compact="true" eventEol="true"/>
+</NewRelicBatchingAppender>
+```
+
+#### PatternLayout
+```xml
+<NewRelicBatchingAppender name="NewRelicAppender"
+                          apiKey="YOUR_API_KEY" 
+                          unwrapJson="true">
+    <PatternLayout pattern="[%d{MM-dd HH:mm:ss}] %-5p %c{1} [%t]: %m%n"/>
+</NewRelicBatchingAppender>
+```
+
+### Migration Guide
+
+**For new deployments**: Consider using `unwrapJson="true"` for cleaner attribute structure.
+
+**For existing deployments**: Keep `unwrapJson="false"` (default) to maintain existing dashboards and alerts that rely on `message.*` attributes.
+
+### Configuration Examples
+
+#### Default Configuration (Backward Compatible)
+```xml
+<NewRelicBatchingAppender name="NewRelicAppender"
+                          apiKey="YOUR_API_KEY"
+                          apiUrl="https://log-api.newrelic.com/log/v1">
+    <!-- unwrapJson defaults to false - maintains message.* structure -->
+    <PatternLayout pattern="[%d{MM-dd HH:mm:ss}] %-5p %c{1} [%t]: %m%n"/>
+</NewRelicBatchingAppender>
+```
+
+#### Enhanced JSON Processing
+```xml
+<NewRelicBatchingAppender name="NewRelicAppender"
+                          apiKey="YOUR_API_KEY"
+                          apiUrl="https://log-api.newrelic.com/log/v1"
+                          unwrapJson="true">
+    <!-- Creates flat attributes for easier querying -->
+    <JsonLayout compact="true" eventEol="true"/>
+</NewRelicBatchingAppender>
+```
 
 ---
 
@@ -148,6 +228,9 @@ Starting from version 1.0.3, a new configuration parameter `mergeCustomFields` h
 ## Configuring queueCapacity and connPoolSize [v1.0.6+]
 Starting from version 1.0.6, the queueCapacity and connPoolSize parameters are exposed to allow for fine-tuning of the appender's performance, especially under high load conditions. These parameters help manage the flow of log data and the efficiency of network connections.
 
+## JSON Message Processing [v1.1.10+]
+Version 1.1.10 introduces configurable JSON message processing with the `unwrapJson` parameter. This feature provides control over how JSON log messages are structured in New Relic, offering both backward compatibility and enhanced attribute organization.
+
 ### TLS 1.2 Requirement
 
 New Relic only accepts connections from clients using TLS version 1.2 or greater. Ensure that your execution environment is configured to use TLS 1.2 or greater.
@@ -161,6 +244,25 @@ New Relic only accepts connections from clients using TLS version 1.2 or greater
   ```sh
   %{LOGLEVEL:log.level}  %{DATA:log.logger} \[%{DATA:log.thread}\]: %{GREEDYDATA:log.message}
   ```
+
+### Troubleshooting JSON Processing
+
+**Issue**: JSON attributes not appearing as expected
+
+**Solutions**:
+1. **Verify JSON format**: Ensure log messages contain valid JSON
+2. **Check unwrapJson setting**: 
+   - `unwrapJson="false"`: Attributes appear as `message.fieldName`
+   - `unwrapJson="true"`: Attributes appear as `fieldName`
+3. **Layout compatibility**: Both JsonLayout and PatternLayout support JSON processing
+4. **NRQL queries**: Adjust queries based on your unwrapJson setting:
+   ```sql
+   -- For unwrapJson="false" (default)
+   SELECT * FROM Log WHERE message.status = 'error'
+   
+   -- For unwrapJson="true"  
+   SELECT * FROM Log WHERE status = 'error'
+   ```
 
 ## Sample log details at New Relic Platform
 
