@@ -38,6 +38,7 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 	private final boolean mergeCustomFields;
 	private final String name;
 	private final String obfuscationPatterns;
+	private final boolean unwrapJson; // 1.1.10 - Flag to control JSON unwrapping behavior (true = unwrap to x.y, false = keep message.x.y)
 	private final LogForwarder logForwarder;
 	private static final Logger logger = StatusLogger.getLogger();
 	private int attempt = 0; // Track attempts across harvest cycles
@@ -59,12 +60,14 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 	private static final boolean MERGE_CUSTOM_FIELDS = false; // by default there will be a separate field custom block
 	// for custom fields i.e. custom.attribute1
 	private static final long DEFAULT_MAX_QUEUE_SIZE_BYTES = 2097152; // 2 MB // 1.1.0
+	private static final boolean DEFAULT_UNWRAP_JSON = false; // 1.1.10 - Default to original behavior (unwrapJson=false means keep message.x.y)
 	private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1); // 1.1.0
 
 	protected NewRelicBatchingAppender(String name, Filter filter, Layout<? extends Serializable> layout,
 			final boolean ignoreExceptions, String apiKey, String apiUrl, String applicationName, Integer batchSize,
 			Long maxMessageSize, Long flushInterval, Long queueCapacity, String logType, String customFields,
-			Boolean mergeCustomFields, int maxRetries, long timeout, Integer connPoolSize, String obfuscationPatterns) {
+			Boolean mergeCustomFields, int maxRetries, long timeout, Integer connPoolSize, String obfuscationPatterns,
+			Boolean unwrapJson) {
 		super(name, filter, layout, ignoreExceptions, Property.EMPTY_ARRAY);
 
 		this.queueCapacity = queueCapacity != null && queueCapacity > 0 ? queueCapacity : DEFAULT_MAX_QUEUE_SIZE_BYTES;
@@ -143,6 +146,9 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 		this.logForwarder = new LogForwarder(apiKey, apiUrl, this.maxMessageSize, this.queue, maxRetries, timeout,
 				connPoolSize);
 		this.obfuscationPatterns = obfuscationPatterns;
+		// unwrapJson=true means unwrap JSON to x.y, unwrapJson=false means keep message.x.y (original behavior)
+		this.unwrapJson = unwrapJson != null ? unwrapJson : DEFAULT_UNWRAP_JSON;
+		
 		startFlushingTask();
 	}
 
@@ -160,6 +166,62 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 		return custom;
 	}
 
+	/**
+	 * Extract JSON from PatternLayout formatted message (1.1.7)
+	 * Handles formats like: "2025-11-11 16:20:00,123 [thread] INFO MyAPI - {\"key\":\"value\"}"
+	 */
+	private String extractJsonFromPatternLayout(String message) {
+		if (message == null) {
+			return message;
+		}
+		
+		try {
+			// Strategy 1: Look for JSON after common log prefixes (timestamp, level, etc.)
+			// This regex looks for JSON objects after typical log patterns
+			java.util.regex.Pattern jsonPattern = java.util.regex.Pattern.compile(".*?-\\s*(.*)$");
+			java.util.regex.Matcher matcher = jsonPattern.matcher(message);
+			
+			if (matcher.find()) {
+				String possibleJson = matcher.group(1).trim();
+				
+				// Check if it looks like JSON
+				if (possibleJson.startsWith("{") && possibleJson.endsWith("}")) {
+					try {
+						// Validate it's proper JSON by parsing it
+						com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+						mapper.readTree(possibleJson);
+						return possibleJson;
+					} catch (Exception e) {
+						// Not valid JSON, continue to fallback
+					}
+				}
+			}
+			
+			// Strategy 2: Look for any JSON-like structure anywhere in the message
+			java.util.regex.Pattern anyJsonPattern = java.util.regex.Pattern.compile("\\{.*\\}");
+			java.util.regex.Matcher anyJsonMatcher = anyJsonPattern.matcher(message);
+			
+			if (anyJsonMatcher.find()) {
+				String possibleJson = anyJsonMatcher.group().trim();
+				
+				try {
+					// Validate it's proper JSON by parsing it
+					com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+					mapper.readTree(possibleJson);
+					return possibleJson;
+				} catch (Exception e) {
+					// Not valid JSON, continue
+				}
+			}
+			
+		} catch (Exception e) {
+			// Extraction failed, return original message
+		}
+		
+		// No JSON found, return original message
+		return message;
+	}
+
 	@PluginFactory
 	public static NewRelicBatchingAppender createAppender(@PluginAttribute("name") String name,
 			@PluginElement("Layout") Layout<? extends Serializable> layout,
@@ -173,7 +235,8 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 			@PluginAttribute(value = "mergeCustomFields") Boolean mergeCustomFields,
 			@PluginAttribute(value = "maxRetries") Integer maxRetries, @PluginAttribute(value = "timeout") Long timeout,
 			@PluginAttribute(value = "connPoolSize") Integer connPoolSize,
-			@PluginAttribute(value = "obfuscationPatterns") String obfuscationPatterns) {
+			@PluginAttribute(value = "obfuscationPatterns") String obfuscationPatterns,
+			@PluginAttribute(value = "unwrapJson") String unwrapJson) {
 
 		if (name == null) {
 			logger.error("No name provided for NewRelicBatchingAppender");
@@ -192,9 +255,15 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 		int retries = maxRetries != null ? maxRetries : 3; // Default to 3 retries if not specified
 		long connectionTimeout = timeout != null ? timeout : 30000; // Default to 30 seconds if not specified
 
+		// Parse unwrapJson string parameter properly  
+		Boolean unwrapJsonBool = null;
+		if (unwrapJson != null && !unwrapJson.trim().isEmpty()) {
+			unwrapJsonBool = Boolean.parseBoolean(unwrapJson.trim());
+		}
+		
 		return new NewRelicBatchingAppender(name, filter, layout, true, apiKey, apiUrl, applicationName, batchSize,
 				maxMessageSize, flushInterval, queueCapacity, logType, customFields, mergeCustomFields, retries,
-				connectionTimeout, connPoolSize, obfuscationPatterns);
+				connectionTimeout, connPoolSize, obfuscationPatterns, unwrapJsonBool);
 	}
 
 	public void appendOld(LogEvent event) {
@@ -269,6 +338,49 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 		}
 
 		String message = new String(getLayout().toByteArray(event));
+		
+
+		
+		// Begin: Configurable JSON message processing (1.1.10) - unwrapJson=true means unwrap JSON
+		if (unwrapJson && message != null) {
+			// Strategy 1: Try Log4j2 JsonLayout processing
+			if (message.startsWith("{") && message.contains("\"message\":")) {
+				try {
+					// Parse the Log4j2 JSON structure
+					com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+					com.fasterxml.jackson.databind.JsonNode jsonNode = mapper.readTree(message);
+					
+					// Extract the actual message content from the "message" field
+					com.fasterxml.jackson.databind.JsonNode messageNode = jsonNode.get("message");
+					if (messageNode != null) {
+						String actualMessage = messageNode.asText();
+						
+						// Check if the extracted message is JSON itself
+						if (actualMessage.startsWith("{") && actualMessage.endsWith("}")) {
+							try {
+								// Validate it's proper JSON by parsing it
+								mapper.readTree(actualMessage);
+								message = actualMessage;
+							} catch (Exception e) {
+								// Not valid JSON, keep as string
+								message = actualMessage;
+							}
+						} else {
+							// Plain text message
+							message = actualMessage;
+						}
+					}
+				} catch (Exception e) {
+					// Strategy 2: Try PatternLayout JSON extraction using regex
+					message = extractJsonFromPatternLayout(message);
+				}
+			} else {
+				// Strategy 2: Try PatternLayout JSON extraction
+				message = extractJsonFromPatternLayout(message);
+			}
+		}
+		// End: Configurable JSON message processing
+		
 		String loggerName = event.getLoggerName();
 		String logLevel = event.getLevel().name();
 		long timestamp = event.getTimeMillis(); // Capture the log creation timestamp

@@ -168,7 +168,9 @@ public class LogForwarder {
 
 	private Map<String, Object> convertToLogEvent(LogEntry entry, boolean mergeCustomFields,
 			Map<String, Object> customFields) {
+		
 		Map<String, Object> logEvent = objectMapper.convertValue(entry, LowercaseKeyMap.class);
+		
 		try {
 			InetAddress localhost = InetAddress.getLocalHost();
 			String hostname = localhost != null ? localhost.getHostName() : "unknown";
@@ -181,7 +183,7 @@ public class LogForwarder {
 		logEvent.put("applicationName", entry.getApplicationName());
 		logEvent.put("name", entry.getName());
 		logEvent.put("source", "NRBatchingAppender");
-		logEvent.put("version", "1.1.3");
+		logEvent.put("version", "1.1.10");
 
 		// Add custom fields
 		if (customFields != null) {
