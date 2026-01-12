@@ -17,4 +17,12 @@ public class LowercaseKeyMap extends HashMap<String, Object> {
 	    this.put(entry.getKey().toLowerCase(), entry.getValue());
 	}
     }
+
+    /**
+     * Put a key-value pair without converting the key to lowercase.
+     * Use this for fields that should preserve their original case (e.g., custom fields).
+     */
+    public Object putPreserveCase(String key, Object value) {
+	return super.put(key, value);
+    }
 }
