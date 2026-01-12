@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -183,13 +184,15 @@ public class LogForwarder {
 		logEvent.put("applicationName", entry.getApplicationName());
 		logEvent.put("name", entry.getName());
 		logEvent.put("source", "NRBatchingAppender");
-		logEvent.put("version", "1.1.10");
+		logEvent.put("version", "1.1.12");
 
 		// Add custom fields
 		if (customFields != null) {
 			if (mergeCustomFields) {
-				for (Map.Entry<String, Object> field : customFields.entrySet()) { // Modify 1.1.0
-					logEvent.put(field.getKey(), field.getValue());
+				// Use putPreserveCase() to preserve custom field name casing
+				LowercaseKeyMap lowercaseMap = (LowercaseKeyMap) logEvent;
+				for (Map.Entry<String, Object> field : customFields.entrySet()) {
+					lowercaseMap.putPreserveCase(field.getKey(), field.getValue());
 				}
 			} else {
 				logEvent.put("custom", customFields);

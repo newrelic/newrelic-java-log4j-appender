@@ -159,7 +159,7 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 			for (String pair : pairs) {
 				String[] keyValue = pair.split("=");
 				if (keyValue.length == 2) {
-					custom.put(keyValue[0], keyValue[1]);
+					custom.put(keyValue[0].trim(), keyValue[1].trim());
 				}
 			}
 		}
