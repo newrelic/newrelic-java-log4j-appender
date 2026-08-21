@@ -184,7 +184,7 @@ public class LogForwarder {
 		logEvent.put("applicationName", entry.getApplicationName());
 		logEvent.put("name", entry.getName());
 		logEvent.put("source", "NRBatchingAppender");
-		logEvent.put("version", "1.1.13");
+		logEvent.put("version", "1.1.14");
 
 		// Add custom fields
 		if (customFields != null) {

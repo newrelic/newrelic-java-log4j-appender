@@ -28,7 +28,7 @@ Add the library to your project using Maven Central:
 <dependency>
     <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>1.1.13</version>
+    <version>1.1.14</version>
 </dependency>
 ```
 
@@ -38,7 +38,7 @@ Or, if using a locally built JAR file:
 <dependency>
     <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>1.1.13</version>
+    <version>1.1.14</version>
     <scope>system</scope>
     <systemPath>${project.basedir}/src/main/resources/custom-log4j2-appender.jar</systemPath>
 </dependency>
@@ -110,7 +110,8 @@ Replace `[your-api-key]` with the ingest key obtained from the New Relic platfor
 | timeout             | No        | 30000                  | Connection timeout (in milliseconds) for HTTP requests                      |
 | obfuscationPatterns | No        |                        | Double caret (^^) separated RegEx patterns to obfuscate the matched pattern in the message. Refer to the example above for obfuscating credit card numbers and expiry dates                  |
 | unwrapJson          | No        | false                  | Controls JSON message processing behavior. When `false` (default), maintains original `message.x.y` structure. When `true`, unwraps JSON to flat attributes like `x.y` |
-| preservePayloadJson | No        | false                  | When `true`, if the log message is a JSON object containing a top-level `payload` key, that key's value is kept intact as a single attribute instead of being decomposed into `payload.<field>` sub-attributes by New Relic. See [Preserving payload JSON](#preserving-payload-json-v1113) below. |
+| preservePayloadJson | No        | false                  | When `true`, keeps a top-level `payload` key intact as a single attribute instead of being decomposed into `payload.<field>` sub-attributes by New Relic. Shorthand for `preserveJsonKeys="payload"`. See [Preserving payload JSON](#preserving-payload-json-v1113) below. |
+| preserveJsonKeys    | No        |                        | Comma-separated list of top-level JSON key names (case-insensitive) to keep intact, in addition to `payload` if `preservePayloadJson="true"` is also set. E.g. `preserveJsonKeys="requestBody,responseData"`. See [Preserving payload JSON](#preserving-payload-json-v1113) below. |
 
 ---
 
@@ -168,7 +169,7 @@ JSON processing works with both Log4j2 layouts:
 
 **For existing deployments**: Keep `unwrapJson="false"` (default) to maintain existing dashboards and alerts that rely on `message.*` attributes.
 
-## Preserving Payload JSON [v1.1.13+]
+## Preserving Payload JSON [v1.1.14+]
 
 ### The problem
 
@@ -201,6 +202,25 @@ The `##` prefix means the value no longer parses as valid JSON on its own, so Ne
 **Requires `unwrapJson="true"`**: this feature inspects the message after it has already been unwrapped from the raw layout output; it has no effect if `unwrapJson` is `false` or the message has no top-level `payload` key.
 
 **Default is `false`**: existing deployments see no change in behavior unless this is explicitly enabled.
+
+### The `preserveJsonKeys` Parameter
+
+Not every Mule flow calls its request/response field `payload`, and some need more than one field protected. `preserveJsonKeys` generalizes the same mechanism to any set of top-level key names:
+
+```xml
+<NewRelicBatchingAppender name="NewRelicAppender"
+                          apiKey="YOUR_API_KEY"
+                          apiUrl="https://log-api.newrelic.com/log/v1"
+                          unwrapJson="true"
+                          preserveJsonKeys="requestBody,responseData">
+    <JsonLayout compact="true" eventEol="true"/>
+</NewRelicBatchingAppender>
+```
+
+- **Case-insensitive**: `preserveJsonKeys="requestbody"` matches a JSON field named `requestBody`, `RequestBody`, etc.
+- **Comma-separated**: list as many key names as needed; each is matched and protected independently.
+- **Combines with `preservePayloadJson`**: if both are set, the keys are unioned rather than one overriding the other — e.g. `preservePayloadJson="true" preserveJsonKeys="requestBody"` protects both `payload` and `requestBody`.
+- **Same mechanism as above**: each protected key's value gets the `##` marker treatment; strip it the same way before parsing the value back to JSON.
 
 ### Configuration Examples
 
