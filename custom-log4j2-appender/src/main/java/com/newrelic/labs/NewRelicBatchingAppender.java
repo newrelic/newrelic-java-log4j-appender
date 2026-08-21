@@ -39,6 +39,7 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 	private final String name;
 	private final String obfuscationPatterns;
 	private final boolean unwrapJson; // 1.1.10 - Flag to control JSON unwrapping behavior (true = unwrap to x.y, false = keep message.x.y)
+	private final boolean preservePayloadJson; // Opt-in: keep a top-level "payload" key in the message JSON intact so New Relic does not decompose it into payload.<field> attributes
 	private final LogForwarder logForwarder;
 	private static final Logger logger = StatusLogger.getLogger();
 	private int attempt = 0; // Track attempts across harvest cycles
@@ -61,13 +62,14 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 	// for custom fields i.e. custom.attribute1
 	private static final long DEFAULT_MAX_QUEUE_SIZE_BYTES = 2097152; // 2 MB // 1.1.0
 	private static final boolean DEFAULT_UNWRAP_JSON = false; // 1.1.10 - Default to original behavior (unwrapJson=false means keep message.x.y)
+	private static final boolean DEFAULT_PRESERVE_PAYLOAD_JSON = false; // Default off - preserves existing behavior for current customers
 	private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1); // 1.1.0
 
 	protected NewRelicBatchingAppender(String name, Filter filter, Layout<? extends Serializable> layout,
 			final boolean ignoreExceptions, String apiKey, String apiUrl, String applicationName, Integer batchSize,
 			Long maxMessageSize, Long flushInterval, Long queueCapacity, String logType, String customFields,
 			Boolean mergeCustomFields, int maxRetries, long timeout, Integer connPoolSize, String obfuscationPatterns,
-			Boolean unwrapJson) {
+			Boolean unwrapJson, Boolean preservePayloadJson) {
 		super(name, filter, layout, ignoreExceptions, Property.EMPTY_ARRAY);
 
 		this.queueCapacity = queueCapacity != null && queueCapacity > 0 ? queueCapacity : DEFAULT_MAX_QUEUE_SIZE_BYTES;
@@ -148,7 +150,8 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 		this.obfuscationPatterns = obfuscationPatterns;
 		// unwrapJson=true means unwrap JSON to x.y, unwrapJson=false means keep message.x.y (original behavior)
 		this.unwrapJson = unwrapJson != null ? unwrapJson : DEFAULT_UNWRAP_JSON;
-		
+		this.preservePayloadJson = preservePayloadJson != null ? preservePayloadJson : DEFAULT_PRESERVE_PAYLOAD_JSON;
+
 		startFlushingTask();
 	}
 
@@ -222,6 +225,33 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 		return message;
 	}
 
+	private static final String PAYLOAD_MARKER = "##";
+
+	/**
+	 * If message is a JSON object with a top-level "payload" key, break that key's value out of
+	 * JSON syntax (by prefixing it) so New Relic's automatic JSON-string parsing leaves it as a
+	 * single opaque attribute instead of decomposing it into payload.<field> sub-attributes.
+	 * Everything else in message is returned unchanged.
+	 */
+	private String neutralizePayloadJson(String message) {
+		if (message == null || !message.trim().startsWith("{")) {
+			return message;
+		}
+		try {
+			com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+			com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(message);
+			if (root == null || !root.isObject() || !root.has("payload")) {
+				return message;
+			}
+			String payloadJson = mapper.writeValueAsString(root.get("payload"));
+			((com.fasterxml.jackson.databind.node.ObjectNode) root).put("payload", PAYLOAD_MARKER + payloadJson);
+			return mapper.writeValueAsString(root);
+		} catch (Exception e) {
+			// Not valid JSON, or no "payload" key - leave message untouched
+			return message;
+		}
+	}
+
 	@PluginFactory
 	public static NewRelicBatchingAppender createAppender(@PluginAttribute("name") String name,
 			@PluginElement("Layout") Layout<? extends Serializable> layout,
@@ -236,7 +266,8 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 			@PluginAttribute(value = "maxRetries") Integer maxRetries, @PluginAttribute(value = "timeout") Long timeout,
 			@PluginAttribute(value = "connPoolSize") Integer connPoolSize,
 			@PluginAttribute(value = "obfuscationPatterns") String obfuscationPatterns,
-			@PluginAttribute(value = "unwrapJson") String unwrapJson) {
+			@PluginAttribute(value = "unwrapJson") String unwrapJson,
+			@PluginAttribute(value = "preservePayloadJson") Boolean preservePayloadJson) {
 
 		if (name == null) {
 			logger.error("No name provided for NewRelicBatchingAppender");
@@ -263,7 +294,7 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 		
 		return new NewRelicBatchingAppender(name, filter, layout, true, apiKey, apiUrl, applicationName, batchSize,
 				maxMessageSize, flushInterval, queueCapacity, logType, customFields, mergeCustomFields, retries,
-				connectionTimeout, connPoolSize, obfuscationPatterns, unwrapJsonBool);
+				connectionTimeout, connPoolSize, obfuscationPatterns, unwrapJsonBool, preservePayloadJson);
 	}
 
 	public void appendOld(LogEvent event) {
@@ -380,7 +411,15 @@ public class NewRelicBatchingAppender extends AbstractAppender {
 			}
 		}
 		// End: Configurable JSON message processing
-		
+
+		// Opt-in (preservePayloadJson="true"): if the (now-unwrapped) message is itself a JSON
+		// object containing a "payload" key, break that key's value out of JSON syntax so New
+		// Relic's automatic JSON-string parsing does not decompose it into payload.<field>
+		// attributes. Everything else in the message is left untouched and still auto-flattens.
+		if (preservePayloadJson && message != null) {
+			message = neutralizePayloadJson(message);
+		}
+
 		String loggerName = event.getLoggerName();
 		String logLevel = event.getLevel().name();
 		long timestamp = event.getTimeMillis(); // Capture the log creation timestamp

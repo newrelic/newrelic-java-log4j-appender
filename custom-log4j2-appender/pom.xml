@@ -6,7 +6,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>1.1.12</version>
+    <version>1.1.13</version>
     <packaging>jar</packaging>
     <name>Custom Log4j2 Appender</name>
     <description>A custom Log4j2 appender for New Relic.</description>
