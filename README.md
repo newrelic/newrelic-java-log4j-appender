@@ -28,7 +28,7 @@ Add the library to your project using Maven Central:
 <dependency>
     <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>1.1.12</version>
+    <version>1.1.14</version>
 </dependency>
 ```
 
@@ -38,7 +38,7 @@ Or, if using a locally built JAR file:
 <dependency>
     <groupId>com.newrelic.labs</groupId>
     <artifactId>custom-log4j2-appender</artifactId>
-    <version>1.1.12</version>
+    <version>1.1.14</version>
     <scope>system</scope>
     <systemPath>${project.basedir}/src/main/resources/custom-log4j2-appender.jar</systemPath>
 </dependency>
@@ -110,6 +110,8 @@ Replace `[your-api-key]` with the ingest key obtained from the New Relic platfor
 | timeout             | No        | 30000                  | Connection timeout (in milliseconds) for HTTP requests                      |
 | obfuscationPatterns | No        |                        | Double caret (^^) separated RegEx patterns to obfuscate the matched pattern in the message. Refer to the example above for obfuscating credit card numbers and expiry dates                  |
 | unwrapJson          | No        | false                  | Controls JSON message processing behavior. When `false` (default), maintains original `message.x.y` structure. When `true`, unwraps JSON to flat attributes like `x.y` |
+| preservePayloadJson | No        | false                  | When `true`, keeps a top-level `payload` key intact as a single attribute instead of being decomposed into `payload.<field>` sub-attributes by New Relic. Shorthand for `preserveJsonKeys="payload"`. See [Preserving payload JSON](#preserving-payload-json-v1113) below. |
+| preserveJsonKeys    | No        |                        | Comma-separated list of top-level JSON key names (case-insensitive) to keep intact, in addition to `payload` if `preservePayloadJson="true"` is also set. E.g. `preserveJsonKeys="requestBody,responseData"`. See [Preserving payload JSON](#preserving-payload-json-v1113) below. |
 
 ---
 
@@ -166,6 +168,59 @@ JSON processing works with both Log4j2 layouts:
 **For new deployments**: Consider using `unwrapJson="true"` for cleaner attribute structure.
 
 **For existing deployments**: Keep `unwrapJson="false"` (default) to maintain existing dashboards and alerts that rely on `message.*` attributes.
+
+## Preserving Payload JSON [v1.1.14+]
+
+### The problem
+
+New Relic's Log API automatically parses any attribute value that is valid JSON text and flattens its fields into dot-notation sub-attributes (e.g. a nested `payload` object becomes `payload.messageId`, `payload.statusCode`, etc.). This happens at ingestion regardless of layout choice, and independently of any [Parsing Rule](#create-grok-parsing-rule-at-new-relic-platform) you may have configured — a Parsing Rule adds extracted attributes on top, it does not suppress New Relic's native JSON flattening.
+
+If your log message is a JSON object with a nested `payload` field that you want to keep intact — e.g. because it's a request/response body you want to query or copy as a single JSON document — this default flattening will break it apart.
+
+### The `preservePayloadJson` Parameter
+
+When `preservePayloadJson="true"` and `unwrapJson="true"`, the appender checks whether the (already-unwrapped) log message is a JSON object with a top-level key named `payload`. If found, that key's value is re-serialized and prefixed with a `##` marker before the whole message is sent — e.g.:
+
+```json
+"payload": "##{\"messageId\":\"...\",\"statusCode\":\"Success\",\"rooms\":[...]}"
+```
+
+The `##` prefix means the value no longer parses as valid JSON on its own, so New Relic leaves it as a single opaque string attribute instead of decomposing it. Every other field in the message (`sourceApp`, `correlationId`, etc.) is untouched and continues to flatten normally.
+
+```xml
+<NewRelicBatchingAppender name="NewRelicAppender"
+                          apiKey="YOUR_API_KEY"
+                          apiUrl="https://log-api.newrelic.com/log/v1"
+                          unwrapJson="true"
+                          preservePayloadJson="true">
+    <JsonLayout compact="true" eventEol="true"/>
+</NewRelicBatchingAppender>
+```
+
+**Recovering the original JSON:** consumers reading the `payload` attribute (NRQL, dashboards, scripts) need to strip the leading `##` before parsing it as JSON, e.g. `substring(payload, 2)`.
+
+**Requires `unwrapJson="true"`**: this feature inspects the message after it has already been unwrapped from the raw layout output; it has no effect if `unwrapJson` is `false` or the message has no top-level `payload` key.
+
+**Default is `false`**: existing deployments see no change in behavior unless this is explicitly enabled.
+
+### The `preserveJsonKeys` Parameter
+
+Not every Mule flow calls its request/response field `payload`, and some need more than one field protected. `preserveJsonKeys` generalizes the same mechanism to any set of top-level key names:
+
+```xml
+<NewRelicBatchingAppender name="NewRelicAppender"
+                          apiKey="YOUR_API_KEY"
+                          apiUrl="https://log-api.newrelic.com/log/v1"
+                          unwrapJson="true"
+                          preserveJsonKeys="requestBody,responseData">
+    <JsonLayout compact="true" eventEol="true"/>
+</NewRelicBatchingAppender>
+```
+
+- **Case-insensitive**: `preserveJsonKeys="requestbody"` matches a JSON field named `requestBody`, `RequestBody`, etc.
+- **Comma-separated**: list as many key names as needed; each is matched and protected independently.
+- **Combines with `preservePayloadJson`**: if both are set, the keys are unioned rather than one overriding the other — e.g. `preservePayloadJson="true" preserveJsonKeys="requestBody"` protects both `payload` and `requestBody`.
+- **Same mechanism as above**: each protected key's value gets the `##` marker treatment; strip it the same way before parsing the value back to JSON.
 
 ### Configuration Examples
 
